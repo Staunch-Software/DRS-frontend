@@ -1,0 +1,227 @@
+/* --- GLOBAL CONTAINER & BACKGROUND --- */
+.login-page {
+  height: 100vh;
+  width: 100vw;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Ensure your image is in this path */
+  background: url('../../assets/images/ship-login.jpg') no-repeat center center/cover;
+  position: relative;
+  font-family: 'Inter', sans-serif;
+}
+
+.login-page::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0, 0, 0, 0.5); /* Overlay opacity */
+  z-index: 1;
+}
+
+.login-container {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: 100%;
+  max-width: 1100px;
+  padding: 0 40px;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap; 
+}
+
+/* --- LEFT SIDE: BRANDING --- */
+.info-side {
+  flex: 1;
+  color: white;
+  padding-right: 50px;
+  min-width: 300px;
+}
+
+.info-side h1 {
+  font-size: 36px; 
+  line-height: 1.1;
+  font-weight: 800;
+  margin-bottom: 25px;
+  text-transform: uppercase;
+  letter-spacing: -1px;
+  text-shadow: 0 4px 10px rgba(0,0,0,0.5);
+}
+
+.description {
+  font-size: 16px;
+  line-height: 1.6;
+  margin-bottom: 35px;
+  opacity: 0.9;
+  max-width: 450px;
+  border-left: 4px solid #ea580c; /* Orange accent */
+  padding-left: 15px;
+}
+
+.icon-row {
+  display: flex;
+  gap: 20px;
+}
+
+.icon-row a {
+  color: white;
+  opacity: 0.8;
+  background: rgba(255,255,255,0.1);
+  padding: 12px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  border: 1px solid rgba(255,255,255,0.1);
+}
+
+.icon-row a:hover {
+  background: #ea580c;
+  border-color: #ea580c;
+  opacity: 1;
+}
+
+/* --- RIGHT SIDE: FORM --- */
+.form-side {
+  flex: 0 0 400px;
+  padding: 40px;
+}
+
+.form-header {
+  color: white;
+  font-size: 32px;
+  font-weight: 700;
+  margin-bottom: 30px;
+}
+
+.input-group { margin-bottom: 20px; }
+
+.input-group label {
+  display: block;
+  color: rgba(255,255,255,0.9);
+  font-size: 13px;
+  margin-bottom: 8px;
+  font-weight: 500;
+}
+
+.input-group input {
+  width: 100%;
+  padding: 12px 15px;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  background: white;
+  color: #333;
+}
+
+.input-group input:focus { outline: 3px solid rgba(234, 88, 12, 0.5); }
+
+.form-options {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 25px;
+  color: white;
+  font-size: 14px;
+}
+
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.forgot-link {
+  color: rgba(255,255,255,0.8);
+  text-decoration: none;
+  font-size: 13px;
+}
+.forgot-link:hover { text-decoration: underline; color: white; }
+
+.signin-btn {
+  width: 100%;
+  padding: 14px;
+  background-color: #ea580c;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  font-size: 16px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.3s;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.signin-btn:hover { background-color: #c2410c; }
+
+/* --- UPDATED COMPACT DEMO CARD --- */
+.creds-hint {
+  margin-top: 15px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 8px 12px;
+  border-radius: 6px;
+  color: #cbd5e1;
+  font-size: 11px;
+  border: 1px dashed rgba(255,255,255,0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  text-align: center;
+}
+
+.hint-title {
+  font-weight: bold;
+  opacity: 0.8;
+  margin-bottom: 2px;
+}
+
+.hint-row {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  flex-wrap: wrap;
+}
+
+.creds-hint code {
+  background: rgba(255,255,255,0.1);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: #fb923c; /* Orange */
+  font-family: monospace;
+  font-weight: bold;
+}
+
+/* --- FOOTER --- */
+.form-footer {
+  margin-top: 15px;
+  color: rgba(255,255,255,0.5);
+  font-size: 10px;
+  line-height: 1.4;
+  text-align: center;
+}
+
+.form-footer a { color: rgba(255,255,255,0.8); }
+
+/* --- ERROR MESSAGE --- */
+.error-text {
+  color: #fca5a5;
+  background: rgba(220, 38, 38, 0.4);
+  padding: 10px;
+  border-radius: 4px;
+  margin-bottom: 20px;
+  font-size: 14px;
+  border: 1px solid rgba(220, 38, 38, 0.5);
+}
+
+/* --- MOBILE RESPONSIVENESS --- */
+@media (max-width: 768px) {
+  .login-container { flex-direction: column; padding: 20px; }
+  .info-side { text-align: center; padding-right: 0; margin-bottom: 40px; }
+  .description { border-left: none; padding-left: 0; margin: 0 auto 30px auto; }
+  .icon-row { justify-content: center; }
+  .form-side { width: 100%; padding: 25px; background: rgba(0,0,0,0.6); border-radius: 12px; }
+}
