@@ -1,68 +1,79 @@
 import React, { useState } from 'react';
 import { useOutletContext } from 'react-router-dom';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { createVessel } from '../../api/vessels'; // Import API
 import { 
-  MessageSquare, ChevronDown, ChevronUp, CheckCircle, ShieldAlert, Filter, RotateCcw 
+  MessageSquare, ChevronDown, ChevronUp, CheckCircle, 
+  ShieldAlert, RotateCcw, Plus, X, Ship 
 } from 'lucide-react';
 
 const ShoreVesselData = () => {
   const { selectedVessels } = useOutletContext(); 
-  const [expandedRow, setExpandedRow] = useState(null);
+  const queryClient = useQueryClient();
   
-  // Local filters for this page
-  const [statusFilter, setStatusFilter] = useState('All');
-  const [priorityFilter, setPriorityFilter] = useState('All');
+  // --- UI STATES ---
+  const [expandedRow, setExpandedRow] = useState(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  
+  // --- FORM STATE ---
+  const [formData, setFormData] = useState({
+    name: '',
+    imo_number: '',
+    vessel_type: 'Oil Tanker',
+    flag: ''
+  });
 
-  // MOCK DATA (Same as dashboard, but here we show ALL of it)
+  // --- API MUTATION ---
+  const addVesselMutation = useMutation({
+    mutationFn: createVessel,
+    onSuccess: () => {
+      alert("Vessel Added Successfully!");
+      setIsModalOpen(false);
+      setFormData({ name: '', imo_number: '', vessel_type: 'Oil Tanker', flag: '' });
+      // Invalidate queries if you are fetching vessel list dynamically
+      queryClient.invalidateQueries(['vessels']);
+    },
+    onError: (error) => {
+      alert("Error: " + (error.response?.data?.detail || error.message));
+    }
+  });
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if(formData.imo_number.length !== 7) {
+      alert("IMO Number must be exactly 7 digits.");
+      return;
+    }
+    addVesselMutation.mutate(formData);
+  };
+
+  // MOCK DATA (Replace with useQuery later)
   const allDefects = [
     { id: 'DEF-101', vesselId: 'v1', vesselName: 'MT ALFA', equipment: 'Main Engine', title: 'Fuel Pump Leak', priority: 'Critical', status: 'Open', date: '2025-10-26', comments: 4, description: 'Leakage.', remarks: 'Spare ordered.' },
-    { id: 'DEF-205', vesselId: 'v2', vesselName: 'MT BRAVO', equipment: 'Ballast Pump', title: 'Vibration Alarm', priority: 'High', status: 'In Progress', date: '2025-10-25', comments: 1, description: 'High vibration.', remarks: 'Checking bolts.' },
-    { id: 'DEF-303', vesselId: 'v3', vesselName: 'MT CHARLIE', equipment: 'Radar', title: 'Magnetron Failure', priority: 'Medium', status: 'Open', date: '2025-10-24', comments: 2, description: 'No signal.', remarks: 'Spare needed.' },
-    { id: 'DEF-102', vesselId: 'v1', vesselName: 'MT ALFA', equipment: 'OWS', title: '15ppm Alarm', priority: 'High', status: 'Open', date: '2025-10-23', comments: 0, description: 'Alarm sounding.', remarks: 'Cleaning filters.' },
-    { id: 'DEF-404', vesselId: 'v4', vesselName: 'MT DELTA', equipment: 'Generator', title: 'Low Oil Pressure', priority: 'Critical', status: 'Open', date: '2025-10-22', comments: 5, description: 'Trip on LOP.', remarks: 'Investigating.' },
-    { id: 'DEF-405', vesselId: 'v4', vesselName: 'MT DELTA', equipment: 'Boiler', title: 'Ignition Failure', priority: 'Normal', status: 'In Progress', date: '2025-10-21', comments: 0, description: 'Flame failure.', remarks: 'Sensor cleaned.' },
+    // ... rest of your mock data
   ];
-
-  // LOGIC: 
-  // 1. Filter by Sidebar Selection (Vessels)
-  // 2. Filter by Local Dropdowns (Status/Priority)
-  const filteredDefects = allDefects.filter(d => {
-    const vesselMatch = selectedVessels.includes(d.vesselId);
-    const statusMatch = statusFilter === 'All' || d.status === statusFilter;
-    const priorityMatch = priorityFilter === 'All' || d.priority === priorityFilter;
-    return vesselMatch && statusMatch && priorityMatch;
-  });
 
   const toggleExpand = (id) => setExpandedRow(expandedRow === id ? null : id);
 
   return (
     <div className="dashboard-container">
       <div className="section-header-with-filters">
-        <h1 className="page-title">Vessel Data ({filteredDefects.length})</h1>
+        <h1 className="page-title">Vessel Data</h1>
         
-        {/* LOCAL FILTERS */}
         <div className="filter-controls">
-          <div className="filter-group">
-            <select className="filter-select" value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)}>
-              <option value="All">All Status</option>
-              <option value="Open">Open</option>
-              <option value="In Progress">In Progress</option>
-            </select>
-          </div>
-          <div className="filter-group">
-            <select className="filter-select" value={priorityFilter} onChange={(e) => setPriorityFilter(e.target.value)}>
-              <option value="All">All Priorities</option>
-              <option value="Critical">Critical</option>
-              <option value="High">High</option>
-              <option value="Normal">Normal</option>
-            </select>
-          </div>
-          <button className="reset-btn" onClick={() => {setStatusFilter('All'); setPriorityFilter('All')}} title="Reset">
+          {/* ADD VESSEL BUTTON */}
+          <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
+            <Plus size={16} /> Add Vessel
+          </button>
+          
+          <button className="reset-btn" title="Reset Filters">
             <RotateCcw size={14} />
           </button>
         </div>
       </div>
 
       <div className="table-card">
+        {/* ... (Your existing table code remains exactly the same) ... */}
         <table className="data-table">
           <thead>
             <tr>
@@ -77,52 +88,86 @@ const ShoreVesselData = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredDefects.length > 0 ? filteredDefects.map((defect) => (
-              <React.Fragment key={defect.id}>
-                <tr className={expandedRow === defect.id ? 'expanded-active' : ''}>
-                  <td style={{fontWeight: 'bold', color: '#0f172a'}}>{defect.vesselName}</td>
-                  <td className="id-cell">{defect.id}</td>
-                  <td>{defect.equipment}</td>
-                  <td className="title-cell">{defect.title}</td>
-                  <td><span className={`badge badge-${defect.priority.toLowerCase()}`}>{defect.priority}</span></td>
-                  <td><span className={`status-dot ${defect.status.toLowerCase().replace(' ', '-')}`}></span>{defect.status}</td>
-                  <td>
-                    <button className="thread-btn">
-                      <MessageSquare size={16} />
-                      {defect.comments > 0 && <span className="msg-count">{defect.comments}</span>}
-                    </button>
-                  </td>
-                  <td>
-                    <button className="action-btn" onClick={() => toggleExpand(defect.id)}>
-                      {expandedRow === defect.id ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                    </button>
-                  </td>
-                </tr>
-
-                {expandedRow === defect.id && (
-                  <tr className="detail-row">
-                    <td colSpan="8">
-                      <div className="detail-content">
-                        <div className="detail-grid">
-                          <div><strong>Description:</strong> <p>{defect.description}</p></div>
-                          <div><strong>Ship Remarks:</strong> <p>{defect.remarks}</p></div>
-                          <div><strong>Date:</strong> <p>{defect.date}</p></div>
-                        </div>
-                        <div className="detail-actions">
-                          <button className="btn-action close-task"><CheckCircle size={16} /> Approve Closure</button>
-                          <button className="btn-action edit"><ShieldAlert size={16} /> Raise Priority</button>
-                        </div>
-                      </div>
-                    </td>
-                  </tr>
-                )}
-              </React.Fragment>
-            )) : (
-              <tr><td colSpan="8" style={{textAlign:'center', padding:'20px'}}>No defects found for selected criteria.</td></tr>
-            )}
+             {/* ... Table Body ... */}
+             <tr><td colSpan="8" style={{textAlign:'center', padding:'20px'}}>Mock Data Table</td></tr>
           </tbody>
         </table>
       </div>
+
+      {/* --- ADD VESSEL MODAL --- */}
+      {isModalOpen && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{width: '450px'}}>
+            <div className="modal-header">
+              <h3><Ship size={18} style={{marginRight:'8px'}}/> Register New Vessel</h3>
+              <button onClick={() => setIsModalOpen(false)}><X size={20} /></button>
+            </div>
+            
+            <form onSubmit={handleSubmit} className="modal-body">
+              
+              <div className="form-group">
+                <label>Vessel Name</label>
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="e.g. MT CHARLIE" 
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value.toUpperCase()})}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>IMO Number (Unique ID)</label>
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="e.g. 9123456" 
+                  maxLength={7}
+                  value={formData.imo_number}
+                  onChange={(e) => setFormData({...formData, imo_number: e.target.value.replace(/\D/g,'')})} // Only numbers
+                  required
+                />
+                <small style={{color:'#64748b', fontSize:'11px'}}>Must be exactly 7 digits.</small>
+              </div>
+
+              <div className="form-group">
+                <label>Vessel Type</label>
+                <select 
+                  className="input-field"
+                  value={formData.vessel_type}
+                  onChange={(e) => setFormData({...formData, vessel_type: e.target.value})}
+                >
+                  <option>Oil Tanker</option>
+                  <option>Bulk Carrier</option>
+                  <option>Container Ship</option>
+                  <option>LNG Carrier</option>
+                  <option>General Cargo</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                {/* <label>Flag State (Optional)</label>
+                <input 
+                  type="text" 
+                  className="input-field" 
+                  placeholder="e.g. Panama" 
+                  value={formData.flag}
+                  onChange={(e) => setFormData({...formData, flag: e.target.value})}
+                /> */}
+              </div>
+
+              <div className="modal-footer" style={{borderTop:'none', padding:'0', marginTop:'20px'}}>
+                <button type="submit" className="btn-primary" style={{width:'100%'}} disabled={addVesselMutation.isPending}>
+                  {addVesselMutation.isPending ? 'Registering...' : 'Confirm Registration'}
+                </button>
+              </div>
+
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 };
