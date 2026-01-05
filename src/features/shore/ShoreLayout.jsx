@@ -3,7 +3,7 @@ import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
 import { 
   LayoutGrid, ListTodo, History, LogOut, Bell, 
-  Building2, ChevronRight, Search, Ship 
+  Building2, ChevronRight, Search, Ship, ChevronDown, UserPlus 
 } from 'lucide-react';
 import './Shore.css';
 
@@ -12,10 +12,12 @@ const ShoreLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
 
-  // --- VESSEL DATA & STATE ---
+  // --- STATES ---
   const [isFlyoutOpen, setIsFlyoutOpen] = useState(false);
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); // <--- NEW STATE
   const [vesselSearch, setVesselSearch] = useState('');
   
+  // Mock Data
   const allVessels = [
     { id: 'v1', name: 'MT ALFA' },
     { id: 'v2', name: 'MT BRAVO' },
@@ -25,7 +27,6 @@ const ShoreLayout = () => {
     { id: 'v6', name: 'MT FOXTROT' },
   ];
 
-  // Default: Select All
   const [selectedVessels, setSelectedVessels] = useState(allVessels.map(v => v.id));
 
   const toggleVessel = (id) => {
@@ -55,6 +56,7 @@ const ShoreLayout = () => {
 
   return (
     <div className="shore-shell">
+      {/* SIDEBAR */}
       <aside className="shore-sidebar">
         <div className="sidebar-header">
           <Building2 size={28} color="#2dd4bf" />
@@ -65,8 +67,6 @@ const ShoreLayout = () => {
         </div>
 
         <nav className="sidebar-nav">
-          
-          {/* 1. FLEET OVERVIEW */}
           <button 
             className={`nav-item ${location.pathname === '/shore/dashboard' ? 'active' : ''}`}
             onClick={() => navigate('/shore/dashboard')}
@@ -75,7 +75,6 @@ const ShoreLayout = () => {
             <span>Fleet Overview</span>
           </button>
 
-          {/* 2. VESSELS (Click -> Page, Hover -> Filter) */}
           <div 
             className="nav-item-container"
             onMouseEnter={() => setIsFlyoutOpen(true)}
@@ -86,44 +85,26 @@ const ShoreLayout = () => {
               onClick={() => navigate('/shore/vessels')} 
             >
               <Ship size={20} />
-              <span>Vessels Defect</span> {/* Renamed from Vessel Filter */}
+              <span>Vessel Defect</span>
               <ChevronRight size={16} className="arrow-right" />
             </button>
 
             {/* FLYOUT MENU */}
             {isFlyoutOpen && (
               <div className="vessel-flyout">
-                <div className="flyout-header">
-                  <h4>Filter Fleet</h4>
-                </div>
-                
+                <div className="flyout-header"><h4>Filter Fleet</h4></div>
                 <div className="v-search-box">
                   <Search size={14} />
-                  <input 
-                    type="text" 
-                    placeholder="Search fleet..." 
-                    value={vesselSearch}
-                    onChange={(e) => setVesselSearch(e.target.value)}
-                  />
+                  <input type="text" placeholder="Search fleet..." value={vesselSearch} onChange={(e) => setVesselSearch(e.target.value)} />
                 </div>
-
                 <div className="v-list">
                   <label className="v-checkbox master">
-                    <input 
-                      type="checkbox" 
-                      checked={selectedVessels.length === allVessels.length}
-                      onChange={toggleSelectAll}
-                    />
+                    <input type="checkbox" checked={selectedVessels.length === allVessels.length} onChange={toggleSelectAll} />
                     <span>Select All ({allVessels.length})</span>
                   </label>
-
                   {filteredVessels.map(v => (
                     <label key={v.id} className="v-checkbox">
-                      <input 
-                        type="checkbox" 
-                        checked={selectedVessels.includes(v.id)}
-                        onChange={() => toggleVessel(v.id)}
-                      />
+                      <input type="checkbox" checked={selectedVessels.includes(v.id)} onChange={() => toggleVessel(v.id)} />
                       <span>{v.name}</span>
                     </label>
                   ))}
@@ -132,7 +113,6 @@ const ShoreLayout = () => {
             )}
           </div>
 
-          {/* 3. MY TASKS */}
           <button 
             className={`nav-item ${location.pathname === '/shore/tasks' ? 'active' : ''}`}
             onClick={() => navigate('/shore/tasks')}
@@ -141,7 +121,6 @@ const ShoreLayout = () => {
             <span>My Tasks</span>
           </button>
 
-          {/* 4. HISTORY */}
           <button 
             className={`nav-item ${location.pathname === '/shore/history' ? 'active' : ''}`}
             onClick={() => navigate('/shore/history')}
@@ -149,7 +128,6 @@ const ShoreLayout = () => {
             <History size={20} />
             <span>History</span>
           </button>
-
         </nav>
 
         <div className="sidebar-footer">
@@ -160,25 +138,56 @@ const ShoreLayout = () => {
               <span className="role">Fleet Admin</span>
             </div>
           </div>
-          <button onClick={handleLogout} className="logout-btn"><LogOut size={18} /></button>
+          {/* Sidebar logout removed since it's in header now, or keep both as you prefer */}
         </div>
       </aside>
 
+      {/* MAIN CONTENT */}
       <main className="shore-main">
         <header className="shore-header">
           <div className="global-status">
             <span>Filtering Data for: <strong>{selectedVessels.length} Vessels</strong></span>
           </div>
+
           <div className="header-actions">
             <button className="icon-btn notification-btn">
               <Bell size={20} />
               <span className="badge-count">5</span>
             </button>
+
+            {/* --- NEW: USER PROFILE DROPDOWN --- */}
+            <div className="profile-container">
+              <div 
+                className="profile-pill" 
+                onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
+              >
+                <div className="avatar-circle">
+                  {user?.name?.charAt(0) || 'J'}
+                </div>
+                <span className="profile-name">{user?.name || 'James Cameron'}</span>
+                <ChevronDown size={16} className={`arrow ${isProfileMenuOpen ? 'up' : ''}`} />
+              </div>
+
+              {/* Dropdown Menu */}
+              {isProfileMenuOpen && (
+                <div className="profile-dropdown">
+                  <div className="dropdown-item" onClick={() => navigate('/shore/admin/users')}>
+                    <UserPlus size={16} />
+                    <span>Admin Panel</span>
+                  </div>
+                  <div className="dropdown-item logout" onClick={handleLogout}>
+                    <LogOut size={16} />
+                    <span>Logout</span>
+                  </div>
+                </div>
+              )}
+            </div>
+            {/* ---------------------------------- */}
+
           </div>
         </header>
 
         <div className="page-content">
-          {/* PASS SELECTION TO CHILDREN */}
           <Outlet context={{ selectedVessels }} />
         </div>
       </main>

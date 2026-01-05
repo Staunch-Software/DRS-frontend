@@ -12,10 +12,12 @@ const handleResponse = async (res) => {
 };
 
 export const defectApi = {
-  // No headers needed for Phase 1 Mock Auth
   getUploadSasUrl: async (blobPath) => {
-    const res = await fetch(`${API_BASE}/defects/sas?blobName=${encodeURIComponent(blobPath)}`);
-    return handleResponse(res);
+    const res = await fetch(`${CONFIG.API_BASE_URL}/defects/sas?blobName=${encodeURIComponent(blobPath)}`);
+    
+    // FIX: We need to await the JSON and return ONLY the url string
+    const data = await handleResponse(res); 
+    return data.url; 
   },
 
   createDefect: (data) => fetch(`${API_BASE}/defects`, {
