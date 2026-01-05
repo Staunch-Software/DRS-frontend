@@ -1,5 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query'; // <--- 1. Import React Query
+import { getVessels } from '../../api/vessels';   // <--- 2. Import API
 import { useAuth } from '../../context/AuthContext';
 import { 
   LayoutGrid, ListTodo, History, LogOut, Bell, 
@@ -14,38 +16,45 @@ const ShoreLayout = () => {
 
   // --- STATES ---
   const [isFlyoutOpen, setIsFlyoutOpen] = useState(false);
-  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false); // <--- NEW STATE
+  const [isProfileMenuOpen, setIsProfileMenuOpen] = useState(false);
   const [vesselSearch, setVesselSearch] = useState('');
   
-  // Mock Data
-  const allVessels = [
-    { id: 'v1', name: 'MT ALFA' },
-    { id: 'v2', name: 'MT BRAVO' },
-    { id: 'v3', name: 'MT CHARLIE' },
-    { id: 'v4', name: 'MT DELTA' },
-    { id: 'v5', name: 'MT ECHO' },
-    { id: 'v6', name: 'MT FOXTROT' },
-  ];
+  // --- 3. FETCH REAL VESSELS FROM DB ---
+  const { data: vesselList = [], isLoading } = useQuery({
+    queryKey: ['vessels'],
+    queryFn: getVessels
+  });
 
-  const [selectedVessels, setSelectedVessels] = useState(allVessels.map(v => v.id));
+  // State for selected IMOs
+  const [selectedVessels, setSelectedVessels] = useState([]);
 
-  const toggleVessel = (id) => {
-    if (selectedVessels.includes(id)) {
-      setSelectedVessels(selectedVessels.filter(v => v !== id));
+  // --- 4. AUTO-SELECT ALL ON LOAD ---
+  // When data arrives from Backend, select all ships by default
+  useEffect(() => {
+    if (vesselList.length > 0 && selectedVessels.length === 0) {
+      setSelectedVessels(vesselList.map(v => v.imo_number));
+    }
+  }, [vesselList]);
+
+  // --- HANDLERS ---
+  const toggleVessel = (imo) => {
+    if (selectedVessels.includes(imo)) {
+      setSelectedVessels(selectedVessels.filter(id => id !== imo));
     } else {
-      setSelectedVessels([...selectedVessels, id]);
+      setSelectedVessels([...selectedVessels, imo]);
     }
   };
 
   const toggleSelectAll = () => {
-    if (selectedVessels.length === allVessels.length) {
-      setSelectedVessels([]);
+    if (selectedVessels.length === vesselList.length) {
+      setSelectedVessels([]); // Deselect All
     } else {
-      setSelectedVessels(allVessels.map(v => v.id));
+      setSelectedVessels(vesselList.map(v => v.imo_number)); // Select All
     }
   };
 
-  const filteredVessels = allVessels.filter(v => 
+  // Filter the list based on search input
+  const filteredVessels = vesselList.filter(v => 
     v.name.toLowerCase().includes(vesselSearch.toLowerCase())
   );
 
@@ -89,25 +98,51 @@ const ShoreLayout = () => {
               <ChevronRight size={16} className="arrow-right" />
             </button>
 
-            {/* FLYOUT MENU */}
+            {/* --- FLYOUT MENU (Now using Real DB Data) --- */}
             {isFlyoutOpen && (
               <div className="vessel-flyout">
                 <div className="flyout-header"><h4>Filter Fleet</h4></div>
+                
                 <div className="v-search-box">
                   <Search size={14} />
-                  <input type="text" placeholder="Search fleet..." value={vesselSearch} onChange={(e) => setVesselSearch(e.target.value)} />
+                  <input 
+                    type="text" 
+                    placeholder="Search fleet..." 
+                    value={vesselSearch} 
+                    onChange={(e) => setVesselSearch(e.target.value)} 
+                  />
                 </div>
+                
                 <div className="v-list">
+                  {/* Select All Checkbox */}
                   <label className="v-checkbox master">
-                    <input type="checkbox" checked={selectedVessels.length === allVessels.length} onChange={toggleSelectAll} />
-                    <span>Select All ({allVessels.length})</span>
+                    <input 
+                      type="checkbox" 
+                      checked={vesselList.length > 0 && selectedVessels.length === vesselList.length} 
+                      onChange={toggleSelectAll} 
+                    />
+                    <span>Select All ({vesselList.length})</span>
                   </label>
+
+                  {/* Loading State */}
+                  {isLoading && <div style={{padding:'10px', fontSize:'12px', color:'#94a3b8'}}>Loading vessels...</div>}
+
+                  {/* Real Vessel List */}
                   {filteredVessels.map(v => (
-                    <label key={v.id} className="v-checkbox">
-                      <input type="checkbox" checked={selectedVessels.includes(v.id)} onChange={() => toggleVessel(v.id)} />
+                    <label key={v.imo_number} className="v-checkbox">
+                      <input 
+                        type="checkbox" 
+                        checked={selectedVessels.includes(v.imo_number)} 
+                        onChange={() => toggleVessel(v.imo_number)} 
+                      />
                       <span>{v.name}</span>
                     </label>
                   ))}
+
+                  {/* Empty State */}
+                  {!isLoading && filteredVessels.length === 0 && (
+                    <div style={{padding:'10px', fontSize:'12px', color:'#94a3b8'}}>No ships found.</div>
+                  )}
                 </div>
               </div>
             )}
@@ -132,13 +167,14 @@ const ShoreLayout = () => {
 
         <div className="sidebar-footer">
           <div className="user-mini-profile">
-            <div className="avatar">TM</div>
+            <div className="avatar">
+               {user?.name?.charAt(0) || 'A'}
+            </div>
             <div className="user-details">
-              <span className="name">James Cameron</span>
-              <span className="role">Fleet Admin</span>
+              <span className="name">{user?.name || 'Admin'}</span>
+              <span className="role">{user?.role || 'Fleet Admin'}</span>
             </div>
           </div>
-          {/* Sidebar logout removed since it's in header now, or keep both as you prefer */}
         </div>
       </aside>
 
@@ -146,29 +182,29 @@ const ShoreLayout = () => {
       <main className="shore-main">
         <header className="shore-header">
           <div className="global-status">
+            {/* Show accurate count based on selection */}
             <span>Filtering Data for: <strong>{selectedVessels.length} Vessels</strong></span>
           </div>
 
           <div className="header-actions">
             <button className="icon-btn notification-btn">
               <Bell size={20} />
-              <span className="badge-count">5</span>
+              <span className="badge-count">3</span>
             </button>
 
-            {/* --- NEW: USER PROFILE DROPDOWN --- */}
+            {/* PROFILE DROPDOWN */}
             <div className="profile-container">
               <div 
                 className="profile-pill" 
                 onClick={() => setIsProfileMenuOpen(!isProfileMenuOpen)}
               >
                 <div className="avatar-circle">
-                  {user?.name?.charAt(0) || 'J'}
+                  {user?.name?.charAt(0) || 'A'}
                 </div>
-                <span className="profile-name">{user?.name || 'James Cameron'}</span>
+                <span className="profile-name">{user?.name || 'Admin'}</span>
                 <ChevronDown size={16} className={`arrow ${isProfileMenuOpen ? 'up' : ''}`} />
               </div>
 
-              {/* Dropdown Menu */}
               {isProfileMenuOpen && (
                 <div className="profile-dropdown">
                   <div className="dropdown-item" onClick={() => navigate('/shore/admin/users')}>
@@ -182,12 +218,11 @@ const ShoreLayout = () => {
                 </div>
               )}
             </div>
-            {/* ---------------------------------- */}
-
           </div>
         </header>
 
         <div className="page-content">
+          {/* We pass the Selected IMOs down to children if they need it */}
           <Outlet context={{ selectedVessels }} />
         </div>
       </main>
