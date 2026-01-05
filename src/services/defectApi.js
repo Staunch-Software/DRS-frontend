@@ -13,11 +13,12 @@ const handleResponse = async (res) => {
 export const defectApi = {
   // NEW METHOD: Asks backend for a signed SAS URL for a specific file path
   getUploadSasUrl: async (blobPath) => {
-    const res = await fetch(`${CONFIG.API_BASE_URL}/attachments/sas?blobName=${encodeURIComponent(blobPath)}`);
-    if (!res.ok) throw new Error("Could not get upload permission from server");
-    const data = await res.json();
-    return data.url; // The backend returns the full URL + Token
-  },
+  const res = await fetch(`${CONFIG.API_BASE_URL}/defects/sas?blobName=${encodeURIComponent(blobPath)}`);
+  
+  if (!res.ok) throw new Error("Could not get upload permission from server");
+  const data = await res.json();
+  return data.url;
+},
 
   createDefect: (data) => fetch(`${CONFIG.API_BASE_URL}/defects`, {
     method: 'POST',
