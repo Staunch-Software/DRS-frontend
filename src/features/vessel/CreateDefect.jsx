@@ -4,14 +4,13 @@ import { Save, Paperclip, MessageSquare, X } from 'lucide-react';
 
 // Phase 1 Services
 import { generateId } from '../../services/idGenerator';
-import { uploadFileToBlob } from '../../services/blobUploadService';
+import { blobUploadService } from '../../services/blobUploadService';
 import { defectApi } from '../../services/defectApi';
 
 const CreateDefect = () => {
   const location = useLocation();
   const navigate = useNavigate();
   
-  // --- State ---
   const [isSaving, setIsSaving] = useState(false);
   const [initialComment, setInitialComment] = useState("");
   const [files, setFiles] = useState([]);
@@ -29,34 +28,19 @@ const CreateDefect = () => {
     prStatus: ''
   });
 
-  // --- Load Edit Data ---
   useEffect(() => {
     if (location.state?.defectToEdit) {
-      const { defectToEdit } = location.state;
-      setFormData({
-        date: defectToEdit.date || '',
-        equipment: defectToEdit.equipment || '',
-        description: defectToEdit.description || '',
-        remarks: defectToEdit.remarks || '',
-        priority: defectToEdit.priority || 'Normal',
-        status: defectToEdit.status || 'Open',
-        responsibility: defectToEdit.responsibility || 'Engine Dept',
-        officeSupport: defectToEdit.officeSupport || 'No',
-        prNumber: defectToEdit.prNumber || '',
-        prStatus: defectToEdit.prStatus || ''
-      });
+      setFormData({ ...location.state.defectToEdit });
     }
   }, [location]);
 
-  // --- Handlers ---
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
   };
 
   const handleFileChange = (e) => {
-    const newFiles = Array.from(e.target.files);
-    setFiles(prev => [...prev, ...newFiles]);
+    setFiles(prev => [...prev, ...Array.from(e.target.files)]);
   };
 
   const removeFile = (index) => {
@@ -65,8 +49,6 @@ const CreateDefect = () => {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    
-    // Basic Validation
     if (!formData.equipment || !formData.description) {
       alert("Please fill in the Component Name and Description.");
       return;
@@ -75,58 +57,59 @@ const CreateDefect = () => {
     setIsSaving(true);
 
     try {
-      // 1. Generate IDs upfront (Idempotency)
-      const defectId = location.state?.defectToEdit?.id || generateId();
+      const defectId = location.state?.defectToEdit?.id || `DEF-${Date.now()}`;
       const threadId = generateId();
 
-      // 2. BLOB-FIRST: Upload attachments directly to Azure
-      const uploadedAttachments = [];
+      // STEP 1: Upload Binaries to Azure Blob
+      const attachmentMeta = [];
       for (const file of files) {
-        const attachmentId = generateId();
-        // Direct upload to Azure Blob Storage
-        const blobPath = await uploadFileToBlob(file, defectId, attachmentId);
-        
-        uploadedAttachments.push({
-          id: attachmentId,
-          thread_id: threadId,
-          file_name: file.name,
+        const attId = generateId();
+        const path = await blobUploadService.uploadBinary(file, defectId, attId);
+        attachmentMeta.push({ 
+          id: attId, 
+          thread_id: threadId, 
+          file_name: file.name, 
           file_size: file.size,
           content_type: file.type,
-          blob_path: blobPath // Verified path in Azure
+          blob_path: path 
         });
       }
 
-      // 3. METADATA-SECOND: Register records in PostgreSQL via API
-      // Create/Update Defect
-      await defectApi.createDefect({
-        id: defectId,
-        ...formData,
-        vessel_id: 'VESSEL-001', // Replace with actual vessel context
-        updated_at: new Date().toISOString()
+      // STEP 2: Upload JSON Metadata to Azure (Module 3)
+      const fullPackage = { 
+        ...formData, 
+        defectId, 
+        initialComment, 
+        attachments: attachmentMeta,
+        vesselId: 'V-101' // Contextual
+      };
+      const jsonPath = await blobUploadService.uploadMetadataJSON(fullPackage, defectId);
+
+      // STEP 3: Register in PostgreSQL via API
+      await defectApi.createDefect({ 
+        ...formData, 
+        id: defectId, 
+        json_backup_path: jsonPath,
+        vessel_id: 'V-101' 
       });
 
-      // Create Initial Thread (The Comment)
-      // Only create if it's a new defect or if a comment was provided
-      if (!location.state?.defectToEdit || initialComment) {
-        await defectApi.createThread({
-          id: threadId,
-          defect_id: defectId,
-          author: "Chief Engineer", // Replace with Auth context
-          body: initialComment || "Defect Reported",
-          created_at: new Date().toISOString()
-        });
+      // Create Initial Thread
+      await defectApi.createThread({
+        id: threadId,
+        defect_id: defectId,
+        author: 'Chief Engineer',
+        body: initialComment || "Defect Reported"
+      });
 
-        // Create Attachment Metadata linked to this thread
-        for (const attachment of uploadedAttachments) {
-          await defectApi.createAttachment(attachment);
-        }
+      // Register Attachments
+      for (const att of attachmentMeta) {
+        await defectApi.createAttachment(att);
       }
 
-      alert("Defect successfully saved to cloud.");
+      alert("Defect Synced: Azure (Files + JSON) & PostgreSQL (API)");
       navigate('/vessel/dashboard');
-    } catch (error) {
-      console.error("Cloud Save Failed:", error);
-      alert(`Error: ${error.message}`);
+    } catch (err) {
+      alert("Sync Failed: " + err.message);
     } finally {
       setIsSaving(false);
     }
@@ -139,98 +122,54 @@ const CreateDefect = () => {
           {location.state?.defectToEdit ? `Update Defect: ${location.state.defectToEdit.id}` : 'Report New Defect'}
         </h1>
         
-        <button 
-          className="btn-primary" 
-          onClick={handleSubmit} 
-          disabled={isSaving}
-          style={{ opacity: isSaving ? 0.7 : 1 }}
-        >
+        <button className="btn-primary" onClick={handleSubmit} disabled={isSaving}>
           <Save size={18} /> 
-          {isSaving ? 'Uploading to Cloud...' : (location.state?.defectToEdit ? 'Update Changes' : 'Save to Cloud')}
+          {isSaving ? 'Syncing Cloud...' : (location.state?.defectToEdit ? 'Update Changes' : 'Save to Cloud')}
         </button>
       </div>
 
       <div className="form-layout">
-        
-        {/* LEFT COLUMN: THE FORM (All original rows restored) */}
         <div className="form-card">
           <h3>Defect Details</h3>
-          
           <form className="defect-form">
             <div className="form-row">
               <div className="form-group">
                 <label>Date Identified</label>
-                <input 
-                  type="date" 
-                  name="date"
-                  className="input-field" 
-                  value={formData.date}
-                  onChange={handleChange}
-                />
+                <input type="date" name="date" className="input-field" value={formData.date} onChange={handleChange} />
               </div>
               <div className="form-group flex-2">
                 <label>Component Name</label>
-                <input 
-                  type="text" 
-                  name="equipment"
-                  className="input-field" 
-                  placeholder="e.g. Main Engine Fuel Pump #2" 
-                  value={formData.equipment}
-                  onChange={handleChange}
-                />
+                <input type="text" name="equipment" className="input-field" placeholder="e.g. Main Engine Fuel Pump #2" value={formData.equipment} onChange={handleChange} />
               </div>
             </div>
 
             <div className="form-group">
               <label>Defect Description</label>
-              <textarea 
-                className="input-field area" 
-                name="description"
-                rows="3" 
-                placeholder="Describe the failure detail..."
-                value={formData.description}
-                onChange={handleChange}
-              ></textarea>
+              <textarea className="input-field area" name="description" rows="3" placeholder="Describe the failure detail..." value={formData.description} onChange={handleChange}></textarea>
             </div>
 
             <div className="form-group">
               <label>Ship's Remarks / Action Taken</label>
-              <textarea 
-                className="input-field area" 
-                name="remarks"
-                rows="2" 
-                placeholder="Temporary repairs done? Spares used?"
-                value={formData.remarks}
-                onChange={handleChange}
-              ></textarea>
+              <textarea className="input-field area" name="remarks" rows="2" placeholder="Temporary repairs done? Spares used?" value={formData.remarks} onChange={handleChange}></textarea>
             </div>
 
             <div className="form-row three-col">
               <div className="form-group">
                 <label>Priority</label>
                 <select name="priority" className="input-field" value={formData.priority} onChange={handleChange}>
-                  <option>Normal</option>
-                  <option>Medium</option>
-                  <option>High</option>
-                  <option>Critical</option>
+                  <option>Normal</option><option>Medium</option><option>High</option><option>Critical</option>
                 </select>
               </div>
-
               <div className="form-group">
                 <label>Status</label>
                 <select name="status" className="input-field" value={formData.status} onChange={handleChange}>
-                  <option>Open</option>
-                  <option>In Progress</option>
-                  <option>Closed</option>
+                  <option>Open</option><option>In Progress</option><option>Closed</option>
                 </select>
               </div>
-
               <div className="form-group">
                 <label>Responsibility</label>
                 <select name="responsibility" className="input-field" value={formData.responsibility} onChange={handleChange}>
-                  <option>Engine Dept</option>
-                  <option>Deck Dept</option>
-                  <option>Electrical</option>
+                  <option>Engine Dept</option><option>Deck Dept</option><option>Electrical</option>
                 </select>
               </div>
             </div>
@@ -239,9 +178,7 @@ const CreateDefect = () => {
               <div className="form-group">
                 <label>Office Support Required?</label>
                 <select name="officeSupport" className="input-field" value={formData.officeSupport} onChange={handleChange}>
-                  <option>No</option>
-                  <option>Yes - Spares</option>
-                  <option>Yes - Service Engineer</option>
+                  <option>No</option><option>Yes - Spares</option><option>Yes - Service Engineer</option>
                 </select>
               </div>
               <div className="form-group">
@@ -256,27 +193,16 @@ const CreateDefect = () => {
           </form>
         </div>
 
-        {/* RIGHT COLUMN: ATTACHMENTS & CHAT */}
         <div className="side-panel">
-          
-          {/* File Upload */}
           <div className="panel-card">
             <h3><Paperclip size={18} /> Attachments</h3>
             <div className="upload-zone">
-              <input 
-                type="file" 
-                multiple 
-                id="file-upload" 
-                onChange={handleFileChange} 
-                accept="image/*,.pdf"
-                hidden 
-              />
+              <input type="file" multiple id="file-upload" onChange={handleFileChange} accept="image/*,.pdf" hidden />
               <label htmlFor="file-upload" className="upload-label">
                 <span>Click to Upload Photos/PDF</span>
                 <small>Direct Cloud Upload</small>
               </label>
             </div>
-            
             {files.length > 0 && (
               <ul className="file-list">
                 {files.map((f, i) => (
@@ -292,21 +218,13 @@ const CreateDefect = () => {
             )}
           </div>
 
-          {/* Initial Comment */}
           {!location.state?.defectToEdit && (
             <div className="panel-card">
               <h3><MessageSquare size={18} /> Initial Comment</h3>
-              <textarea 
-                className="input-field area" 
-                rows="4" 
-                placeholder="Tag @Superintendent or add initial context..."
-                value={initialComment}
-                onChange={(e) => setInitialComment(e.target.value)}
-              ></textarea>
+              <textarea className="input-field area" rows="4" placeholder="Tag @Superintendent..." value={initialComment} onChange={(e) => setInitialComment(e.target.value)}></textarea>
               <div className="hint-text">This starts the cloud chat thread.</div>
             </div>
           )}
-
         </div>
       </div>
     </div>

@@ -11,21 +11,28 @@ const handleResponse = async (res) => {
 };
 
 export const defectApi = {
-  createDefect: (data) => 
-    fetch(`${API_BASE}/defects`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }).then(handleResponse),
+  // NEW METHOD: Asks backend for a signed SAS URL for a specific file path
+  getUploadSasUrl: async (blobPath) => {
+    const res = await fetch(`${CONFIG.API_BASE_URL}/attachments/sas?blobName=${encodeURIComponent(blobPath)}`);
+    if (!res.ok) throw new Error("Could not get upload permission from server");
+    const data = await res.json();
+    return data.url; // The backend returns the full URL + Token
+  },
 
-  createThread: (data) => 
+  createDefect: (data) => fetch(`${CONFIG.API_BASE_URL}/defects`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(data),
+  }).then(handleResponse),
+
+  createThread: (data) =>
     fetch(`${API_BASE}/threads`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(data),
     }).then(handleResponse),
 
-  createAttachment: (data) => 
+  createAttachment: (data) =>
     fetch(`${API_BASE}/attachments`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
