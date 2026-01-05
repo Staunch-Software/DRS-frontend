@@ -1,6 +1,13 @@
+// src/services/defectApi.js
 import { CONFIG } from '../config';
 
 const API_BASE = CONFIG.API_BASE_URL;
+
+// Helper to get the token from wherever you store it (usually localStorage)
+const getAuthHeader = () => {
+  const token = localStorage.getItem('token'); // <--- Check if your key is 'token' or 'access_token'
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
 
 const handleResponse = async (res) => {
   if (!res.ok) {
@@ -11,32 +18,43 @@ const handleResponse = async (res) => {
 };
 
 export const defectApi = {
-  // NEW METHOD: Asks backend for a signed SAS URL for a specific file path
   getUploadSasUrl: async (blobPath) => {
-  const res = await fetch(`${CONFIG.API_BASE_URL}/defects/sas?blobName=${encodeURIComponent(blobPath)}`);
-  
-  if (!res.ok) throw new Error("Could not get upload permission from server");
-  const data = await res.json();
-  return data.url;
-},
+    const res = await fetch(
+      `${API_BASE}/defects/sas?blobName=${encodeURIComponent(blobPath)}`, 
+      {
+        method: 'GET',
+        headers: {
+          ...getAuthHeader(), // <--- ADDED THIS
+        }
+      }
+    );
+    return handleResponse(res);
+  },
 
-  createDefect: (data) => fetch(`${CONFIG.API_BASE_URL}/defects`, {
+  createDefect: (data) => fetch(`${API_BASE}/defects`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 
+      'Content-Type': 'application/json',
+      ...getAuthHeader() // <--- ADDED THIS
+    },
     body: JSON.stringify(data),
   }).then(handleResponse),
 
-  createThread: (data) =>
-    fetch(`${API_BASE}/threads`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }).then(handleResponse),
+  createThread: (data) => fetch(`${API_BASE}/threads`, {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      ...getAuthHeader() // <--- ADDED THIS
+    },
+    body: JSON.stringify(data),
+  }).then(handleResponse),
 
-  createAttachment: (data) =>
-    fetch(`${API_BASE}/attachments`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(data),
-    }).then(handleResponse),
+  createAttachment: (data) => fetch(`${API_BASE}/attachments`, {
+    method: 'POST',
+    headers: { 
+      'Content-Type': 'application/json',
+      ...getAuthHeader() // <--- ADDED THIS
+    },
+    body: JSON.stringify(data),
+  }).then(handleResponse),
 };
