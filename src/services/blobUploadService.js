@@ -1,26 +1,34 @@
-import { CONFIG } from '../config';
+import { defectApi } from './defectApi';
 
-export const uploadFileToBlob = async (file, defectId, attachmentId) => {
-  const containerUrl = CONFIG.AZURE_STORAGE_URL;
-  const sasToken = CONFIG.AZURE_SAS_TOKEN;
-  
-  if (!containerUrl || !sasToken) {
-    throw new Error("Azure Storage configuration is missing.");
-  }
+const uploadToAzure = async (blob, path) => {
+  // 1. Ask the API for a temporary signed URL for this specific path
+  // This satisfies the "API generates short-lived SAS" requirement
+  const signedUrl = await defectApi.getUploadSasUrl(path);
 
-  const blobName = `${defectId}/${attachmentId}_${file.name}`;
-  const uploadUrl = `${containerUrl}/${blobName}?${sasToken}`;
-
-  const response = await fetch(uploadUrl, {
+  // 2. Upload the file directly to Azure using that signed URL
+  const response = await fetch(signedUrl, {
     method: 'PUT',
     headers: {
       'x-ms-blob-type': 'BlockBlob',
-      'Content-Type': file.type,
+      'Content-Type': blob.type || 'application/json',
     },
-    body: file,
+    body: blob,
   });
 
-  if (!response.ok) throw new Error(`Blob upload failed: ${response.statusText}`);
+  if (!response.ok) throw new Error(`Azure Upload Failed: ${response.statusText}`);
+  return path; 
+};
 
-  return blobName;
+export const blobUploadService = {
+  uploadBinary: async (file, defectId, attachmentId) => {
+    const path = `${defectId}/attachments/${attachmentId}_${file.name}`;
+    return uploadToAzure(file, path);
+  },
+
+  uploadMetadataJSON: async (data, defectId) => {
+    const jsonString = JSON.stringify(data, null, 2);
+    const blob = new Blob([jsonString], { type: 'application/json' });
+    const path = `${defectId}/metadata.json`;
+    return uploadToAzure(blob, path);
+  }
 };
