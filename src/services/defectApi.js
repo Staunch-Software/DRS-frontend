@@ -3,6 +3,12 @@ import { CONFIG } from '../config';
 
 const API_BASE = CONFIG.API_BASE_URL;
 
+// Helper to get the token (matches your localStorage key from the screenshot)
+const getAuthHeader = () => {
+  const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+};
+
 const handleResponse = async (res) => {
   if (!res.ok) {
     const error = await res.json().catch(() => ({ message: 'Network error' }));
@@ -12,29 +18,44 @@ const handleResponse = async (res) => {
 };
 
 export const defectApi = {
+  // --- GET METHODS (Needed for Shore UI) ---
+
+  // Fetches all defects for the dashboard
+  getDefects: () => fetch(`${API_BASE}/defects`, {
+    headers: { ...getAuthHeader() }
+  }).then(handleResponse),
+
+  // Fetches the conversation for a specific defect
+  getThreads: (defectId) => fetch(`${API_BASE}/defects/${defectId}/threads`, {
+    headers: { ...getAuthHeader() }
+  }).then(handleResponse),
+
+
+  // --- POST METHODS (Already implemented) ---
+
   getUploadSasUrl: async (blobPath) => {
-    const res = await fetch(`${CONFIG.API_BASE_URL}/defects/sas?blobName=${encodeURIComponent(blobPath)}`);
-    
-    // FIX: We need to await the JSON and return ONLY the url string
+    const res = await fetch(`${CONFIG.API_BASE_URL}/defects/sas?blobName=${encodeURIComponent(blobPath)}`, {
+      headers: { ...getAuthHeader() }
+    });
     const data = await handleResponse(res); 
     return data.url; 
   },
 
-  createDefect: (data) => fetch(`${API_BASE}/defects`, {
+  createDefect: (data) => fetch(`${CONFIG.API_BASE_URL}/defects`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
     body: JSON.stringify(data),
   }).then(handleResponse),
 
-  createThread: (data) => fetch(`${API_BASE}/defects/threads`, {
+  createThread: (data) => fetch(`${CONFIG.API_BASE_URL}/defects/threads`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
     body: JSON.stringify(data),
   }).then(handleResponse),
 
-  createAttachment: (data) => fetch(`${API_BASE}/defects/attachments`, {
+  createAttachment: (data) => fetch(`${CONFIG.API_BASE_URL}/defects/attachments`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
     body: JSON.stringify(data),
   }).then(handleResponse),
 };

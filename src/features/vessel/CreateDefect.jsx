@@ -47,124 +47,135 @@ const CreateDefect = () => {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
-  // const handleSubmit = async (e) => {
-  //   e.preventDefault();
-  //   if (!formData.equipment || !formData.description) {
-  //     alert("Please fill in the Component Name and Description.");
-  //     return;
-  //   }
-
-  //   setIsSaving(true);
-
-  //   try {
-  //     const defectId = location.state?.defectToEdit?.id || `DEF-${Date.now()}`;
-  //     const threadId = generateId();
-
-  //     // STEP 1: Upload Binaries to Azure Blob
-  //     const attachmentMeta = [];
-  //     for (const file of files) {
-  //       const attId = generateId();
-  //       const path = await blobUploadService.uploadBinary(file, defectId, attId);
-  //       attachmentMeta.push({ 
-  //         id: attId, 
-  //         thread_id: threadId, 
-  //         file_name: file.name, 
-  //         file_size: file.size,
-  //         content_type: file.type,
-  //         blob_path: path 
-  //       });
-  //     }
-
-  //     // STEP 2: Upload JSON Metadata to Azure (Module 3)
-  //     const fullPackage = { 
-  //       ...formData, 
-  //       defectId, 
-  //       initialComment, 
-  //       attachments: attachmentMeta,
-  //       vesselId: 'V-101' // Contextual
-  //     };
-  //     const jsonPath = await blobUploadService.uploadMetadataJSON(fullPackage, defectId);
-
-  //     // STEP 3: Register in PostgreSQL via API
-  //     await defectApi.createDefect({ 
-  //       ...formData, 
-  //       id: defectId, 
-  //       json_backup_path: jsonPath,
-  //       vessel_id: 'V-101' 
-  //     });
-
-  //     // Create Initial Thread
-  //     await defectApi.createThread({
-  //       id: threadId,
-  //       defect_id: defectId,
-  //       author: 'Chief Engineer',
-  //       body: initialComment || "Defect Reported"
-  //     });
-
-  //     // Register Attachments
-  //     for (const att of attachmentMeta) {
-  //       await defectApi.createAttachment(att);
-  //     }
-
-  //     alert("Defect Synced: Azure (Files + JSON) & PostgreSQL (API)");
-  //     navigate('/vessel/dashboard');
-  //   } catch (err) {
-  //     alert("Sync Failed: " + err.message);
-  //   } finally {
-  //     setIsSaving(false);
-  //   }
-  // };
-
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (!formData.equipment || !formData.description) {
+      alert("Please fill in the Component Name and Description.");
+      return;
+    }
+
     setIsSaving(true);
 
     try {
-      // FIX: Use a real UUID instead of "TEST-..."
-      const defectId = generateId();
+      // FIX 1: Use a real UUID. DEF-timestamp is NOT a valid UUID.
+      const defectId = location.state?.defectToEdit?.id || generateId();
       const threadId = generateId();
 
-      // Ensure date is in YYYY-MM-DD format for the backend
-      const formattedDate = new Date(formData.date).toISOString().split('T')[0];
+      // STEP 1: Upload Binaries to Azure Blob
+      const attachmentMeta = [];
+      for (const file of files) {
+        const attId = generateId();
+        const path = await blobUploadService.uploadBinary(file, defectId, attId);
+        attachmentMeta.push({
+          id: attId,
+          thread_id: threadId,
+          file_name: file.name,
+          file_size: file.size,
+          content_type: file.type,
+          blob_path: path
+        });
+      }
 
-      const payload = {
-        id: defectId, // This will now be a valid UUID string
-        date: formattedDate,
+      // STEP 2: Upload JSON Metadata to Azure
+      const fullPackage = {
+        ...formData,
+        defectId,
+        initialComment,
+        attachments: attachmentMeta,
+        vesselId: '9832913' // Use the IMO from your DB for testing
+      };
+      const jsonPath = await blobUploadService.uploadMetadataJSON(fullPackage, defectId);
+
+      // STEP 3: Register in PostgreSQL via API
+      // Ensure we send the exact keys the Pydantic schema expects
+      await defectApi.createDefect({
+        id: defectId,
+        date: formData.date,
         equipment: formData.equipment,
         description: formData.description,
-        remarks: formData.remarks || "",
-        priority: formData.priority || "Normal",
-        status: formData.status || "Open",
-        responsibility: formData.responsibility || "Engine Dept",
-        officeSupport: formData.officeSupport || "No",
-        prNumber: formData.prNumber || "",
-        prStatus: formData.prStatus || "",
-        json_backup_path: "MOCK_AZURE_PATH/metadata.json"
-      };
+        remarks: formData.remarks,
+        priority: formData.priority,
+        status: formData.status,
+        responsibility: formData.responsibility,
+        officeSupport: formData.officeSupport,
+        prNumber: formData.prNumber,
+        prStatus: formData.prStatus,
+        json_backup_path: jsonPath
+      });
 
-      console.log("🚀 Sending Valid UUID Payload:", payload);
-
-      // 1. Create Defect
-      await defectApi.createDefect(payload);
-
-      // 2. Create Thread (Also needs a valid UUID)
+      // Create Initial Thread
       await defectApi.createThread({
         id: threadId,
         defect_id: defectId,
-        author: "Chief Engineer",
-        body: initialComment || "Defect reported via integration test."
+        author: 'Chief Engineer',
+        body: initialComment || "Defect Reported"
       });
 
-      alert("Success! Data stored in PostgreSQL with valid UUIDs.");
-      navigate('/vessel/dashboard');
+      // Register Attachments
+      for (const att of attachmentMeta) {
+        await defectApi.createAttachment(att);
+      }
 
-    } catch (error) {
-      console.error("API Error:", error);
-      alert(`API Error: ${error.message}`);
+      alert("Defect Synced Successfully!");
+      navigate('/vessel/dashboard');
+    } catch (err) {
+      console.error("Sync Error:", err);
+      alert("Sync Failed: " + err.message);
     } finally {
       setIsSaving(false);
     }
   };
+
+  // const handleSubmit = async (e) => {
+  //   e.preventDefault();
+  //   setIsSaving(true);
+
+  //   try {
+  //     // FIX: Use a real UUID instead of "TEST-..."
+  //     const defectId = generateId();
+  //     const threadId = generateId();
+
+  //     // Ensure date is in YYYY-MM-DD format for the backend
+  //     const formattedDate = new Date(formData.date).toISOString().split('T')[0];
+
+  //     const payload = {
+  //       id: defectId, // This will now be a valid UUID string
+  //       date: formattedDate,
+  //       equipment: formData.equipment,
+  //       description: formData.description,
+  //       remarks: formData.remarks || "",
+  //       priority: formData.priority || "Normal",
+  //       status: formData.status || "Open",
+  //       responsibility: formData.responsibility || "Engine Dept",
+  //       officeSupport: formData.officeSupport || "No",
+  //       prNumber: formData.prNumber || "",
+  //       prStatus: formData.prStatus || "",
+  //       json_backup_path: "MOCK_AZURE_PATH/metadata.json"
+  //     };
+
+  //     console.log("🚀 Sending Valid UUID Payload:", payload);
+
+  //     // 1. Create Defect
+  //     await defectApi.createDefect(payload);
+
+  //     // 2. Create Thread (Also needs a valid UUID)
+  //     await defectApi.createThread({
+  //       id: threadId,
+  //       defect_id: defectId,
+  //       author: "Chief Engineer",
+  //       body: initialComment || "Defect reported via integration test."
+  //     });
+
+  //     alert("Success! Data stored in PostgreSQL with valid UUIDs.");
+  //     navigate('/vessel/dashboard');
+
+  //   } catch (error) {
+  //     console.error("API Error:", error);
+  //     alert(`API Error: ${error.message}`);
+  //   } finally {
+  //     setIsSaving(false);
+  //   }
+  // };
 
   return (
     <div className="create-defect-container">

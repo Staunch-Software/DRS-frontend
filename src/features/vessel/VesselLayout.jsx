@@ -81,7 +81,7 @@ const VesselLayout = () => {
     { label: 'Dashboard', icon: <LayoutDashboard size={20} />, path: '/vessel/dashboard' },
     { label: 'Create Defect', icon: <PlusCircle size={20} />, path: '/vessel/create' },
     { label: 'My Tasks', icon: <ListTodo size={20} />, path: '/vessel/tasks' },
-    { label: 'History', icon: <History size={20} />, path: '/vessel/history' },
+    { label: 'Defects', icon: <History size={20} />, path: '/vessel/history' },
   ];
 
   return (
