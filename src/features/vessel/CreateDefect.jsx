@@ -10,11 +10,11 @@ import { defectApi } from '../../services/defectApi';
 const CreateDefect = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  
+
   const [isSaving, setIsSaving] = useState(false);
   const [initialComment, setInitialComment] = useState("");
   const [files, setFiles] = useState([]);
-  
+
   const [formData, setFormData] = useState({
     date: new Date().toISOString().split('T')[0],
     equipment: '',
@@ -47,69 +47,120 @@ const CreateDefect = () => {
     setFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  // const handleSubmit = async (e) => {
+  //   e.preventDefault();
+  //   if (!formData.equipment || !formData.description) {
+  //     alert("Please fill in the Component Name and Description.");
+  //     return;
+  //   }
+
+  //   setIsSaving(true);
+
+  //   try {
+  //     const defectId = location.state?.defectToEdit?.id || `DEF-${Date.now()}`;
+  //     const threadId = generateId();
+
+  //     // STEP 1: Upload Binaries to Azure Blob
+  //     const attachmentMeta = [];
+  //     for (const file of files) {
+  //       const attId = generateId();
+  //       const path = await blobUploadService.uploadBinary(file, defectId, attId);
+  //       attachmentMeta.push({ 
+  //         id: attId, 
+  //         thread_id: threadId, 
+  //         file_name: file.name, 
+  //         file_size: file.size,
+  //         content_type: file.type,
+  //         blob_path: path 
+  //       });
+  //     }
+
+  //     // STEP 2: Upload JSON Metadata to Azure (Module 3)
+  //     const fullPackage = { 
+  //       ...formData, 
+  //       defectId, 
+  //       initialComment, 
+  //       attachments: attachmentMeta,
+  //       vesselId: 'V-101' // Contextual
+  //     };
+  //     const jsonPath = await blobUploadService.uploadMetadataJSON(fullPackage, defectId);
+
+  //     // STEP 3: Register in PostgreSQL via API
+  //     await defectApi.createDefect({ 
+  //       ...formData, 
+  //       id: defectId, 
+  //       json_backup_path: jsonPath,
+  //       vessel_id: 'V-101' 
+  //     });
+
+  //     // Create Initial Thread
+  //     await defectApi.createThread({
+  //       id: threadId,
+  //       defect_id: defectId,
+  //       author: 'Chief Engineer',
+  //       body: initialComment || "Defect Reported"
+  //     });
+
+  //     // Register Attachments
+  //     for (const att of attachmentMeta) {
+  //       await defectApi.createAttachment(att);
+  //     }
+
+  //     alert("Defect Synced: Azure (Files + JSON) & PostgreSQL (API)");
+  //     navigate('/vessel/dashboard');
+  //   } catch (err) {
+  //     alert("Sync Failed: " + err.message);
+  //   } finally {
+  //     setIsSaving(false);
+  //   }
+  // };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!formData.equipment || !formData.description) {
-      alert("Please fill in the Component Name and Description.");
-      return;
-    }
-
     setIsSaving(true);
 
     try {
-      const defectId = location.state?.defectToEdit?.id || `DEF-${Date.now()}`;
+      // FIX: Use a real UUID instead of "TEST-..."
+      const defectId = generateId();
       const threadId = generateId();
 
-      // STEP 1: Upload Binaries to Azure Blob
-      const attachmentMeta = [];
-      for (const file of files) {
-        const attId = generateId();
-        const path = await blobUploadService.uploadBinary(file, defectId, attId);
-        attachmentMeta.push({ 
-          id: attId, 
-          thread_id: threadId, 
-          file_name: file.name, 
-          file_size: file.size,
-          content_type: file.type,
-          blob_path: path 
-        });
-      }
+      // Ensure date is in YYYY-MM-DD format for the backend
+      const formattedDate = new Date(formData.date).toISOString().split('T')[0];
 
-      // STEP 2: Upload JSON Metadata to Azure (Module 3)
-      const fullPackage = { 
-        ...formData, 
-        defectId, 
-        initialComment, 
-        attachments: attachmentMeta,
-        vesselId: 'V-101' // Contextual
+      const payload = {
+        id: defectId, // This will now be a valid UUID string
+        date: formattedDate,
+        equipment: formData.equipment,
+        description: formData.description,
+        remarks: formData.remarks || "",
+        priority: formData.priority || "Normal",
+        status: formData.status || "Open",
+        responsibility: formData.responsibility || "Engine Dept",
+        officeSupport: formData.officeSupport || "No",
+        prNumber: formData.prNumber || "",
+        prStatus: formData.prStatus || "",
+        json_backup_path: "MOCK_AZURE_PATH/metadata.json"
       };
-      const jsonPath = await blobUploadService.uploadMetadataJSON(fullPackage, defectId);
 
-      // STEP 3: Register in PostgreSQL via API
-      await defectApi.createDefect({ 
-        ...formData, 
-        id: defectId, 
-        json_backup_path: jsonPath,
-        vessel_id: 'V-101' 
-      });
+      console.log("🚀 Sending Valid UUID Payload:", payload);
 
-      // Create Initial Thread
+      // 1. Create Defect
+      await defectApi.createDefect(payload);
+
+      // 2. Create Thread (Also needs a valid UUID)
       await defectApi.createThread({
         id: threadId,
         defect_id: defectId,
-        author: 'Chief Engineer',
-        body: initialComment || "Defect Reported"
+        author: "Chief Engineer",
+        body: initialComment || "Defect reported via integration test."
       });
 
-      // Register Attachments
-      for (const att of attachmentMeta) {
-        await defectApi.createAttachment(att);
-      }
-
-      alert("Defect Synced: Azure (Files + JSON) & PostgreSQL (API)");
+      alert("Success! Data stored in PostgreSQL with valid UUIDs.");
       navigate('/vessel/dashboard');
-    } catch (err) {
-      alert("Sync Failed: " + err.message);
+
+    } catch (error) {
+      console.error("API Error:", error);
+      alert(`API Error: ${error.message}`);
     } finally {
       setIsSaving(false);
     }
@@ -121,9 +172,9 @@ const CreateDefect = () => {
         <h1 className="page-title">
           {location.state?.defectToEdit ? `Update Defect: ${location.state.defectToEdit.id}` : 'Report New Defect'}
         </h1>
-        
+
         <button className="btn-primary" onClick={handleSubmit} disabled={isSaving}>
-          <Save size={18} /> 
+          <Save size={18} />
           {isSaving ? 'Syncing Cloud...' : (location.state?.defectToEdit ? 'Update Changes' : 'Save to Cloud')}
         </button>
       </div>
@@ -157,13 +208,15 @@ const CreateDefect = () => {
               <div className="form-group">
                 <label>Priority</label>
                 <select name="priority" className="input-field" value={formData.priority} onChange={handleChange}>
-                  <option>Normal</option><option>Medium</option><option>High</option><option>Critical</option>
+                  <option value="NORMAL">Normal</option>
+                  <option value="HIGH">High</option>
+                  <option value="CRITICAL">Critical</option>
                 </select>
               </div>
               <div className="form-group">
                 <label>Status</label>
                 <select name="status" className="input-field" value={formData.status} onChange={handleChange}>
-                  <option>Open</option><option>In Progress</option><option>Closed</option>
+                  <option value="OPEN">Open</option><option value="IN_PROGRESS">In Progress</option><option value="CLOSED">Closed</option>
                 </select>
               </div>
               <div className="form-group">
@@ -209,9 +262,9 @@ const CreateDefect = () => {
                   <li key={i}>
                     <div className="file-info">
                       <span className="file-name">{f.name}</span>
-                      <span className="size">({(f.size/1024).toFixed(0)}kb)</span>
+                      <span className="size">({(f.size / 1024).toFixed(0)}kb)</span>
                     </div>
-                    <button className="btn-remove" onClick={() => removeFile(i)}><X size={14}/></button>
+                    <button className="btn-remove" onClick={() => removeFile(i)}><X size={14} /></button>
                   </li>
                 ))}
               </ul>

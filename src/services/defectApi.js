@@ -26,13 +26,13 @@ export const defectApi = {
     body: JSON.stringify(data),
   }).then(handleResponse),
 
-  createThread: (data) => fetch(`${API_BASE}/threads`, {
+  createThread: (data) => fetch(`${API_BASE}/defects/threads`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
   }).then(handleResponse),
 
-  createAttachment: (data) => fetch(`${API_BASE}/attachments`, {
+  createAttachment: (data) => fetch(`${API_BASE}/defects/attachments`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(data),
