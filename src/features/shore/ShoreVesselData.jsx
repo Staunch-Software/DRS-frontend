@@ -1,185 +1,89 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createVessel, getVessels } from '../../api/vessels';
-import { defectApi } from '../../services/defectApi'; // Use the centralized API service
-import { blobUploadService } from '../../services/blobUploadService';
-import { generateId } from '../../services/idGenerator';
-import { CONFIG } from '../../config';
+import { getDefects } from '../../api/defects';
+import { useAuth } from '../../context/AuthContext'; // <--- Import Auth for Permissions
 import { 
   MessageSquare, CheckCircle, Plus, X, Ship, Mail, Filter, 
-  Search, ChevronDown, Check, Send, Paperclip, Download, ChevronUp
+  Search, ChevronDown, Check, AlertCircle 
 } from 'lucide-react';
 
-/**
- * SUB-COMPONENT: ThreadSection
- * Handles fetching threads and posting replies (Blob-First logic)
- */
-const ThreadSection = ({ defectId }) => {
-  const queryClient = useQueryClient();
-  const [replyText, setReplyText] = useState("");
-  const [files, setFiles] = useState([]);
-  const [isUploading, setIsUploading] = useState(false);
-
-  // 1. Fetch Threads for this specific defect
-  const { data: threads = [], isLoading } = useQuery({
-    queryKey: ['threads', defectId],
-    queryFn: () => defectApi.getThreads(defectId),
-    enabled: !!defectId
-  });
-
-  // 2. Reply Logic (Blob-First, Metadata-Second)
-  const handleReply = async () => {
-    if (!replyText && files.length === 0) return;
-    setIsUploading(true);
-
-    try {
-      const threadId = generateId();
-      const uploadedAttachments = [];
-
-      // A. BLOB-FIRST: Upload files to Azure
-      for (const file of files) {
-        const attachmentId = generateId();
-        const path = await blobUploadService.uploadBinary(file, defectId, attachmentId);
-        uploadedAttachments.push({
-          id: attachmentId,
-          thread_id: threadId,
-          file_name: file.name,
-          file_size: file.size,
-          content_type: file.type,
-          blob_path: path
-        });
-      }
-
-      // B. METADATA-SECOND: Save Thread
-      await defectApi.createThread({
-        id: threadId,
-        defect_id: defectId,
-        author: "Superintendent", // Context-driven
-        body: replyText
-      });
-
-      // C. METADATA-SECOND: Save Attachment Records
-      for (const meta of uploadedAttachments) {
-        await defectApi.createAttachment(meta);
-      }
-
-      setReplyText("");
-      setFiles([]);
-      queryClient.invalidateQueries(['threads', defectId]);
-    } catch (err) {
-      alert("Failed to send reply: " + err.message);
-    } finally {
-      setIsUploading(false);
-    }
-  };
-
-  if (isLoading) return <div className="p-4 text-sm text-slate-500">Loading conversation...</div>;
-
-  return (
-    <div className="thread-view-container" style={{ padding: '20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
-      <div className="thread-history" style={{ marginBottom: '20px' }}>
-        {threads.map(t => (
-          <div key={t.id} className="thread-message" style={{ marginBottom: '15px', padding: '12px', background: 'white', borderRadius: '8px', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
-              <strong style={{ fontSize: '13px', color: '#1e293b' }}>{t.author}</strong>
-              <span style={{ fontSize: '11px', color: '#94a3b8' }}>{new Date(t.created_at).toLocaleString()}</span>
-            </div>
-            <p style={{ fontSize: '14px', color: '#334155', margin: '0' }}>{t.body}</p>
-            
-            {/* Attachments List */}
-            {t.attachments?.length > 0 && (
-              <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                {t.attachments.map(a => (
-                  <a 
-                    key={a.id} 
-                    href={a.blob_path} // Backend already signs this with SAS
-                    target="_blank" 
-                    rel="noreferrer"
-                    style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#3b82f6', textDecoration: 'none', padding: '4px 8px', background: '#eff6ff', borderRadius: '4px' }}
-                  >
-                    <Download size={12} /> {a.file_name}
-                  </a>
-                ))}
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
-
-      {/* Reply Box */}
-      <div className="reply-box" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
-        <textarea 
-          className="input-field"
-          placeholder="Write a reply to the vessel..."
-          value={replyText}
-          onChange={(e) => setReplyText(e.target.value)}
-          style={{ minHeight: '80px', resize: 'vertical' }}
-        />
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <input 
-              type="file" multiple id={`file-reply-${defectId}`} 
-              onChange={(e) => setFiles(Array.from(e.target.files))} 
-              hidden 
-            />
-            <label htmlFor={`file-reply-${defectId}`} className="btn-secondary" style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <Paperclip size={14} /> {files.length > 0 ? `${files.length} files` : 'Attach Files'}
-            </label>
-            {files.length > 0 && <button onClick={() => setFiles([])} style={{ border: 'none', background: 'none', color: '#ef4444', fontSize: '12px', cursor: 'pointer' }}>Clear</button>}
-          </div>
-          <button 
-            className="btn-primary" 
-            onClick={handleReply} 
-            disabled={isUploading || (!replyText && files.length === 0)}
-          >
-            <Send size={14} /> {isUploading ? 'Sending...' : 'Send Reply'}
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-};
-
 const ShoreVesselData = () => {
+  const { user } = useAuth(); // <--- Get current user info
   const queryClient = useQueryClient();
   const dropdownRef = useRef(null);
   
+  // --- UI STATE ---
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [vesselSearch, setVesselSearch] = useState('');
+  
+  // --- FILTER STATE ---
   const [selectedImos, setSelectedImos] = useState([]);
-  const [expandedDefectId, setExpandedDefectId] = useState(null); // Track expanded row
 
-  // --- QUERIES ---
+  // --- QUERY 1: FETCH VESSELS (For Dropdown & Mapping) ---
   const { data: vesselList = [] } = useQuery({
     queryKey: ['vessels'],
     queryFn: getVessels
   });
 
+  // --- QUERY 2: FETCH ALL DEFECTS (For Table) ---
   const { data: allDefects = [], isLoading: isDefectsLoading } = useQuery({
     queryKey: ['defects', 'all'], 
-    queryFn: () => defectApi.getDefects() 
+    queryFn: () => getDefects('') 
   });
 
+  // --- EFFECT: DEFAULT SELECT ALL ---
+  // When vessels load, select all of them by default
   useEffect(() => {
     if (vesselList.length > 0 && selectedImos.length === 0) {
       setSelectedImos(vesselList.map(v => v.imo_number));
     }
   }, [vesselList]);
 
+  // --- EFFECT: CLICK OUTSIDE DROPDOWN TO CLOSE ---
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsFilterOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
   // --- FILTER LOGIC ---
   const toggleVessel = (imo) => {
-    setSelectedImos(prev => prev.includes(imo) ? prev.filter(id => id !== imo) : [...prev, imo]);
+    if (selectedImos.includes(imo)) {
+      setSelectedImos(selectedImos.filter(id => id !== imo));
+    } else {
+      setSelectedImos([...selectedImos, imo]);
+    }
   };
 
   const toggleSelectAll = () => {
-    setSelectedImos(selectedImos.length === vesselList.length ? [] : vesselList.map(v => v.imo_number));
+    if (selectedImos.length === vesselList.length) {
+      setSelectedImos([]); // Deselect All
+    } else {
+      setSelectedImos(vesselList.map(v => v.imo_number)); // Select All
+    }
   };
 
-  const filteredDefects = allDefects.filter(defect => selectedImos.includes(defect.vessel_imo));
+  // Filter the vessels shown INSIDE the dropdown (Search bar logic)
+  const dropdownVessels = vesselList.filter(v => 
+    v.name.toLowerCase().includes(vesselSearch.toLowerCase())
+  );
+
+  // Filter the DEFECTS shown in the TABLE based on selection
+  const filteredDefects = allDefects.filter(defect => 
+    selectedImos.includes(defect.vessel_imo)
+  );
 
   // --- MUTATION: CREATE VESSEL ---
-  const [formData, setFormData] = useState({ name: '', imo_number: '', vessel_type: 'Oil Tanker', email: '' });
+  const [formData, setFormData] = useState({
+    name: '', imo_number: '', vessel_type: 'Oil Tanker', email: ''
+  });
+
   const addVesselMutation = useMutation({
     mutationFn: createVessel,
     onSuccess: () => {
@@ -187,17 +91,23 @@ const ShoreVesselData = () => {
       setIsModalOpen(false);
       setFormData({ name: '', imo_number: '', vessel_type: 'Oil Tanker', email: '' });
       queryClient.invalidateQueries(['vessels']); 
-    }
+    },
+    onError: (err) => alert("Error: " + (err.response?.data?.detail || err.message))
   });
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if(formData.imo_number.length !== 7) return alert("IMO Number must be 7 digits.");
+    if(formData.imo_number.length !== 7) {
+      alert("IMO Number must be exactly 7 digits.");
+      return;
+    }
     addVesselMutation.mutate(formData);
   };
 
   return (
     <div className="dashboard-container">
+      
+      {/* --- HEADER --- */}
       <div className="section-header-with-filters">
         <div>
           <h1 className="page-title">Defect Overview</h1>
@@ -207,45 +117,120 @@ const ShoreVesselData = () => {
         </div>
         
         <div className="filter-controls">
-          {/* Vessel Filter Dropdown (Your existing logic) */}
+          
+          {/* --- CUSTOM MULTI-SELECT DROPDOWN --- */}
           <div className="custom-dropdown-container" ref={dropdownRef} style={{position:'relative'}}>
-            <button className="filter-btn" onClick={() => setIsFilterOpen(!isFilterOpen)} style={{ display:'flex', alignItems:'center', gap:'8px', background:'white', border:'1px solid #cbd5e1', padding:'8px 16px', borderRadius:'6px', cursor:'pointer', minWidth:'200px', justifyContent:'space-between' }}>
+            
+            {/* The Trigger Button */}
+            <button 
+              className="filter-btn" 
+              onClick={() => setIsFilterOpen(!isFilterOpen)}
+              style={{
+                display:'flex', alignItems:'center', gap:'8px', 
+                background:'white', border:'1px solid #cbd5e1', 
+                padding:'8px 16px', borderRadius:'6px', cursor:'pointer', minWidth:'200px', justifyContent:'space-between'
+              }}
+            >
               <div style={{display:'flex', alignItems:'center', gap:'8px'}}>
                 <Filter size={14} color="#64748b"/>
-                <span style={{fontSize:'13px', color:'#334155'}}>{selectedImos.length === vesselList.length ? 'All Vessels' : `${selectedImos.length} Selected`}</span>
+                <span style={{fontSize:'13px', color:'#334155'}}>
+                  {selectedImos.length === vesselList.length ? 'All Vessels' : `${selectedImos.length} Selected`}
+                </span>
               </div>
               <ChevronDown size={14} color="#64748b"/>
             </button>
 
+            {/* The Dropdown Menu */}
             {isFilterOpen && (
-              <div className="dropdown-menu" style={{ position:'absolute', top:'45px', right:'0', width:'280px', background:'white', border:'1px solid #e2e8f0', boxShadow:'0 4px 12px rgba(0,0,0,0.1)', borderRadius:'8px', zIndex: 100, padding:'10px' }}>
-                <input type="text" placeholder="Search ships..." value={vesselSearch} onChange={(e) => setVesselSearch(e.target.value)} style={{ width:'90%', padding:'6px 10px', marginBottom:'10px', border:'1px solid #e2e8f0', borderRadius:'6px', fontSize:'13px' }} />
+              <div className="dropdown-menu" style={{
+                position:'absolute', top:'45px', right:'0', width:'280px',
+                background:'white', border:'1px solid #e2e8f0', boxShadow:'0 4px 12px rgba(0,0,0,0.1)',
+                borderRadius:'8px', zIndex: 100, padding:'10px'
+              }}>
+                
+                {/* Search Bar inside Dropdown */}
+                <div style={{position:'relative', marginBottom:'10px'}}>
+                  <Search size={14} style={{position:'absolute', left:'10px', top:'9px', color:'#94a3b8'}}/>
+                  <input 
+                    type="text" 
+                    placeholder="Search ships..." 
+                    value={vesselSearch}
+                    onChange={(e) => setVesselSearch(e.target.value)}
+                    style={{
+                      width:'100%', padding:'6px 10px 6px 30px', 
+                      border:'1px solid #e2e8f0', borderRadius:'6px', fontSize:'13px'
+                    }}
+                  />
+                </div>
+
+                {/* List Container */}
                 <div style={{maxHeight:'200px', overflowY:'auto'}}>
-                  <div onClick={toggleSelectAll} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px', cursor:'pointer' }}>
-                     <div style={{ width:'16px', height:'16px', border:'1px solid #cbd5e1', borderRadius:'4px', background: selectedImos.length === vesselList.length ? '#3b82f6' : 'white' }}>
+                  
+                  {/* Select All Option */}
+                  <div 
+                    onClick={toggleSelectAll}
+                    style={{
+                      display:'flex', alignItems:'center', gap:'10px', padding:'8px', 
+                      cursor:'pointer', borderRadius:'4px', 
+                      background: selectedImos.length === vesselList.length ? '#eff6ff' : 'transparent'
+                    }}
+                  >
+                     <div style={{
+                       width:'16px', height:'16px', border:'1px solid #cbd5e1', borderRadius:'4px',
+                       display:'flex', alignItems:'center', justifyContent:'center',
+                       background: selectedImos.length === vesselList.length ? '#3b82f6' : 'white',
+                       borderColor: selectedImos.length === vesselList.length ? '#3b82f6' : '#cbd5e1'
+                     }}>
                         {selectedImos.length === vesselList.length && <Check size={12} color="white"/>}
                      </div>
-                     <span style={{fontSize:'13px', fontWeight:'600'}}>Select All</span>
+                     <span style={{fontSize:'13px', fontWeight:'600', color:'#1e293b'}}>Select All</span>
                   </div>
-                  {vesselList.filter(v => v.name.toLowerCase().includes(vesselSearch.toLowerCase())).map(v => (
-                    <div key={v.imo_number} onClick={() => toggleVessel(v.imo_number)} style={{ display:'flex', alignItems:'center', gap:'10px', padding:'8px', cursor:'pointer' }}>
-                       <div style={{ width:'16px', height:'16px', border:'1px solid #cbd5e1', borderRadius:'4px', background: selectedImos.includes(v.imo_number) ? '#3b82f6' : 'white' }}>
-                          {selectedImos.includes(v.imo_number) && <Check size={12} color="white"/>}
-                       </div>
-                       <span style={{fontSize:'13px'}}>{v.name}</span>
-                    </div>
-                  ))}
+
+                  <div style={{height:'1px', background:'#e2e8f0', margin:'5px 0'}}></div>
+
+                  {/* Individual Ship Options */}
+                  {dropdownVessels.map(v => {
+                    const isSelected = selectedImos.includes(v.imo_number);
+                    return (
+                      <div 
+                        key={v.imo_number}
+                        onClick={() => toggleVessel(v.imo_number)}
+                        style={{
+                          display:'flex', alignItems:'center', gap:'10px', padding:'8px', 
+                          cursor:'pointer', borderRadius:'4px',
+                          background: isSelected ? '#f1f5f9' : 'transparent'
+                        }}
+                      >
+                         <div style={{
+                           width:'16px', height:'16px', border:'1px solid #cbd5e1', borderRadius:'4px',
+                           display:'flex', alignItems:'center', justifyContent:'center',
+                           background: isSelected ? '#3b82f6' : 'white',
+                           borderColor: isSelected ? '#3b82f6' : '#cbd5e1'
+                         }}>
+                            {isSelected && <Check size={12} color="white"/>}
+                         </div>
+                         <div style={{display:'flex', flexDirection:'column'}}>
+                           <span style={{fontSize:'13px', color:'#1e293b'}}>{v.name}</span>
+                           <span style={{fontSize:'11px', color:'#94a3b8'}}>IMO: {v.imo_number}</span>
+                         </div>
+                      </div>
+                    )
+                  })}
                 </div>
               </div>
             )}
           </div>
 
-          <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
-            <Plus size={16} /> Register Vessel
-          </button>
+          {/* --- REGISTER VESSEL BUTTON (Only for Admin) --- */}
+          {user?.role === 'ADMIN' && (
+            <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
+              <Plus size={16} /> Register Vessel
+            </button>
+          )}
         </div>
       </div>
 
+      {/* --- DEFECT TABLE --- */}
       <div className="table-card">
         <table className="data-table">
           <thead>
@@ -253,47 +238,108 @@ const ShoreVesselData = () => {
               <th>ID</th>
               <th>Vessel</th>
               <th>Equipment</th>
+              <th>Defect Title</th>
               <th>Priority</th>
               <th>Status</th>
-              <th>Actions</th>
+              <th>Thread</th>
             </tr>
           </thead>
           <tbody>
-             {isDefectsLoading && <tr><td colSpan="6" style={{textAlign:'center', padding:'30px'}}>Loading...</td></tr>}
+             {isDefectsLoading && <tr><td colSpan="7" style={{textAlign:'center', padding:'30px'}}>Loading Defects...</td></tr>}
+             
+             {!isDefectsLoading && filteredDefects.length === 0 && (
+               <tr>
+                 <td colSpan="7" style={{textAlign:'center', padding:'40px', color: '#64748b'}}>
+                   <CheckCircle size={24} style={{marginBottom:'10px', color:'#10b981'}}/>
+                   <br/>No defects match your filter.
+                 </td>
+               </tr>
+             )}
+
              {filteredDefects.map((defect) => (
-               <React.Fragment key={defect.id}>
-                 <tr style={{ cursor: 'pointer', background: expandedDefectId === defect.id ? '#f8fafc' : 'transparent' }}>
-                   <td style={{fontFamily:'monospace', fontSize:'12px'}}>{defect.id.substring(0,8)}</td>
-                   <td style={{fontWeight:'600'}}>{defect.vessel_name || defect.vessel_imo}</td>
-                   <td>{defect.equipment_name}</td>
-                   <td><span className={`badge ${defect.priority.toLowerCase()}`}>{defect.priority}</span></td>
-                   <td><span className={`status-dot ${defect.status.toLowerCase()}`}></span>{defect.status.replace('_', ' ')}</td>
-                   <td>
-                     <button 
-                        className="btn-icon" 
-                        onClick={() => setExpandedDefectId(expandedDefectId === defect.id ? null : defect.id)}
-                      >
-                       {expandedDefectId === defect.id ? <ChevronUp size={18}/> : <MessageSquare size={18}/>}
-                     </button>
-                   </td>
-                 </tr>
-                 {expandedDefectId === defect.id && (
-                   <tr>
-                     <td colSpan="6" style={{ padding: '0' }}>
-                        <ThreadSection defectId={defect.id} />
-                     </td>
-                   </tr>
-                 )}
-               </React.Fragment>
+               <tr key={defect.id}>
+                 <td style={{fontFamily:'monospace', fontSize:'12px', color:'#64748b'}}>{defect.id.substring(0,8)}...</td>
+                 <td style={{fontWeight:'600'}}>
+                    {/* Handle simple string or object response from backend */}
+                    {defect.vessel_name || defect.vessel_imo}
+                 </td>
+                 <td>{defect.equipment_name || defect.equipment}</td>
+                 <td>{defect.title}</td>
+                 <td><span className={`badge ${defect.priority.toLowerCase()}`}>{defect.priority}</span></td>
+                 <td><span className={`status-dot ${defect.status.toLowerCase()}`}></span>{defect.status.replace('_', ' ')}</td>
+                 <td><button className="btn-icon"><MessageSquare size={16}/></button></td>
+               </tr>
              ))}
           </tbody>
         </table>
       </div>
 
-      {/* Vessel Registration Modal (Unchanged) */}
-      {isModalOpen && (
+      {/* --- REGISTER VESSEL MODAL --- */}
+      {isModalOpen && user?.role === 'ADMIN' && (
         <div className="modal-overlay">
-          {/* ... your existing modal code ... */}
+          <div className="modal-content" style={{width: '450px'}}>
+            <div className="modal-header">
+              <h3><Ship size={18} style={{marginRight:'8px'}}/> Register New Vessel</h3>
+              <button onClick={() => setIsModalOpen(false)}><X size={20} /></button>
+            </div>
+            
+            <form onSubmit={handleSubmit} className="modal-body">
+              <div className="form-group">
+                <label>IMO Number (Unique 7-digit)</label>
+                <input 
+                  className="input-field" 
+                  maxLength={7} 
+                  placeholder="9792058" 
+                  value={formData.imo_number} 
+                  onChange={(e) => setFormData({...formData, imo_number: e.target.value.replace(/\D/g,'')})} 
+                  required 
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Vessel Name</label>
+                <input 
+                  className="input-field" 
+                  placeholder="e.g. A.M. UMANG" 
+                  value={formData.name} 
+                  onChange={(e) => setFormData({...formData, name: e.target.value.toUpperCase()})} 
+                  required 
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Vessel Type</label>
+                <select 
+                  className="input-field" 
+                  value={formData.vessel_type} 
+                  onChange={(e) => setFormData({...formData, vessel_type: e.target.value})}
+                >
+                  <option>Bulk Carrier</option>
+                  <option>Oil Tanker</option>
+                  <option>Container Ship</option>
+                  <option>LNG Carrier</option>
+                  <option>General Cargo</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label><Mail size={14} style={{verticalAlign:'middle'}}/> Ship Email</label>
+                <input 
+                  type="email" 
+                  className="input-field" 
+                  placeholder="email@ship.com" 
+                  value={formData.email} 
+                  onChange={(e) => setFormData({...formData, email: e.target.value})} 
+                />
+              </div>
+
+              <div className="modal-footer" style={{borderTop:'none', padding:'0', marginTop:'20px'}}>
+                <button type="submit" className="btn-primary" style={{width:'100%'}} disabled={addVesselMutation.isPending}>
+                  {addVesselMutation.isPending ? 'Registering...' : 'Confirm Registration'}
+                </button>
+              </div>
+            </form>
+          </div>
         </div>
       )}
     </div>
