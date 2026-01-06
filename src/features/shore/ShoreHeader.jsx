@@ -16,11 +16,6 @@ const ShoreHeader = () => {
 
   return (
     <header className="shore-header">
-      {/* Left Side */}
-      <div className="global-status">
-        <span>Fleet Status: <strong>Online</strong></span>
-      </div>
-
       <div className="header-right">
         {/* Notification Bell */}
         <button className="icon-btn notification-btn">
@@ -28,26 +23,36 @@ const ShoreHeader = () => {
           <span className="badge-count">3</span>
         </button>
 
-        {/* --- PROFILE DROPDOWN (Orange Style) --- */}
+        {/* --- PROFILE DROPDOWN --- */}
         <div className="profile-container">
           <div 
             className="profile-pill" 
             onClick={() => setIsMenuOpen(!isMenuOpen)}
           >
             <div className="avatar-circle">
-              {user?.name?.charAt(0) || 'J'}
+              {user?.name?.charAt(0) || 'U'}
             </div>
-            <span className="profile-name">{user?.name || 'John David'}</span>
+            <div style={{display:'flex', flexDirection:'column', lineHeight:'1.2'}}>
+                <span className="profile-name">{user?.name}</span>
+                <span style={{fontSize:'10px', color:'#94a3b8', textAlign:'left'}}>
+                    {user?.job_title || user?.role}
+                </span>
+            </div>
             <ChevronDown size={16} className={`arrow ${isMenuOpen ? 'up' : ''}`} />
           </div>
 
           {/* Dropdown Menu */}
           {isMenuOpen && (
             <div className="profile-dropdown">
-              <div className="dropdown-item" onClick={() => navigate('/shore/admin/users')}>
-                <UserPlus size={16} />
-                <span>Admin Panel</span>
-              </div>
+              
+              {/* CHECK FOR ADMIN ROLE */}
+              {user?.role === 'ADMIN' && (
+                <div className="dropdown-item" onClick={() => navigate('/shore/admin/users')}>
+                  <UserPlus size={16} />
+                  <span>Admin Panel</span>
+                </div>
+              )}
+
               <div className="dropdown-item logout" onClick={handleLogout}>
                 <LogOut size={16} />
                 <span>Logout</span>
