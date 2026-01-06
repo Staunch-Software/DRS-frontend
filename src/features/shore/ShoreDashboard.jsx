@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useOutletContext, useNavigate } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom'; // <--- Removed useOutletContext
 import { 
   AlertTriangle, Clock, ClipboardList, MessageSquare, 
   ChevronDown, ChevronUp, CheckCircle, ShieldAlert
@@ -7,10 +7,10 @@ import {
 
 const ShoreDashboard = () => {
   const navigate = useNavigate();
-  const { selectedVessels } = useOutletContext(); 
+  // const { selectedVessels } = useOutletContext(); <--- REMOVED (This caused the crash)
   const [expandedRow, setExpandedRow] = useState(null);
 
-  // --- UPDATED MOCK DATA (With Full Details) ---
+  // --- MOCK DATA (With Full Details) ---
   const allDefects = [
     { 
       id: 'DEF-101', vesselId: 'v1', vesselName: 'MT ALFA', 
@@ -59,8 +59,8 @@ const ShoreDashboard = () => {
     }
   ];
 
-  // 1. FILTER
-  const filteredDefects = allDefects.filter(d => selectedVessels.includes(d.vesselId));
+  // 1. FILTER: Since Sidebar filter is gone, we show ALL defects (Global Overview)
+  const filteredDefects = allDefects; 
 
   // 2. SLICE (Show only latest 5)
   const latestDefects = filteredDefects.slice(0, 5);
@@ -104,7 +104,7 @@ const ShoreDashboard = () => {
       </div>
 
       <div className="section-header">
-        <h3>Latest 5 Defects (Filtered)</h3>
+        <h3>Latest 5 Defects (Global)</h3>
       </div>
 
       <div className="table-card">
@@ -145,7 +145,7 @@ const ShoreDashboard = () => {
                   </td>
                 </tr>
 
-                {/* --- DETAILED EXPANDED VIEW (MATCHING VESSEL LAYOUT) --- */}
+                {/* --- DETAILED EXPANDED VIEW --- */}
                 {expandedRow === defect.id && (
                   <tr className="detail-row">
                     <td colSpan="8">

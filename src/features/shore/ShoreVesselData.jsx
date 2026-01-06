@@ -152,7 +152,7 @@ const ShoreVesselData = () => {
                     value={vesselSearch}
                     onChange={(e) => setVesselSearch(e.target.value)}
                     style={{
-                      width:'100%', padding:'6px 10px 6px 30px', 
+                      width:'80%', padding:'6px 10px 6px 30px', 
                       border:'1px solid #e2e8f0', borderRadius:'6px', fontSize:'13px'
                     }}
                   />
