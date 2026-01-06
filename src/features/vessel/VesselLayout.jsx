@@ -1,9 +1,11 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { useAuth } from '../../context/AuthContext';
+import { getVessels } from '../../api/vessels'; // To resolve Ship Name from IMO
 import { 
   LayoutDashboard, PlusCircle, ListTodo, History,
-  LogOut, Bell, Anchor, Wifi, Settings, X, Check, FileText, User
+  LogOut, Bell, Anchor, Wifi, Settings, X, FileText 
 } from 'lucide-react';
 import './Vessel.css';
 
@@ -12,54 +14,27 @@ const VesselLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   
-  // --- NOTIFICATION STATE ---
   const [showNotifications, setShowNotifications] = useState(false);
-  const notifRef = useRef(null); // To detect clicks outside
+  const notifRef = useRef(null);
 
-  // --- MOCK NOTIFICATIONS ---
-  const notifications = [
-    {
-      id: 1,
-      type: 'comment',
-      user: 'Supt. James',
-      avatarColor: '#3b82f6', // Blue
-      text: 'commented on Fuel Pump Leak',
-      subtext: 'Please check the pressure gauge readings again.',
-      time: '10 mins ago',
-      unread: true
-    },
-    {
-      id: 2,
-      type: 'system',
-      user: 'System',
-      avatarColor: '#10b981', // Green
-      text: 'PR-2025-001 Approved',
-      subtext: 'Spare parts request has been processed by HQ.',
-      time: '1 hour ago',
-      unread: true
-    },
-    {
-      id: 3,
-      type: 'mention',
-      user: '2nd Engineer',
-      avatarColor: '#f97316', // Orange
-      text: 'mentioned you in Vibration Alarm',
-      subtext: '@Chief can you verify this reading?',
-      time: '3 hours ago',
-      unread: false
-    },
-    {
-      id: 4,
-      type: 'file',
-      user: 'Fleet Manager',
-      avatarColor: '#8b5cf6', // Purple
-      text: 'shared a file Manual_v2.pdf',
-      subtext: '',
-      hasFile: true,
-      time: 'Yesterday',
-      unread: false
-    }
-  ];
+  // --- 1. IDENTIFY ASSIGNED VESSEL ---
+  // Users (Crew) usually belong to 1 ship. We take the first one.
+  const assignedImo = user?.assignedVessels?.[0];
+
+  // --- 2. FETCH VESSEL DETAILS ---
+  // We need this to show the Real Name "MT ALFA" instead of just "9123456"
+  const { data: vessels = [] } = useQuery({
+    queryKey: ['vessels'],
+    queryFn: getVessels,
+    staleTime: 1000 * 60 * 60, // Cache for 1 hour
+  });
+
+  const currentVessel = useMemo(() => {
+    return vessels.find(v => v.imo_number === assignedImo);
+  }, [vessels, assignedImo]);
+
+  const shipName = currentVessel ? currentVessel.name : 'Unassigned Vessel';
+  const shipImo = assignedImo || 'No IMO';
 
   const handleLogout = () => {
     logout();
@@ -86,13 +61,14 @@ const VesselLayout = () => {
 
   return (
     <div className="vessel-shell">
-      {/* SIDEBAR (Unchanged) */}
+      {/* SIDEBAR */}
       <aside className="vessel-sidebar">
         <div className="sidebar-header">
           <Anchor size={28} color="#ea580c" />
           <div className="ship-info">
-            <h3>MT ALFA</h3>
-            <span>IMO: 9123456</span>
+            {/* REAL DATA DISPLAY */}
+            <h3 title={shipName}>{shipName}</h3>
+            <span>IMO: {shipImo}</span>
           </div>
         </div>
 
@@ -111,13 +87,18 @@ const VesselLayout = () => {
 
         <div className="sidebar-footer">
           <div className="user-mini-profile">
-            <div className="avatar">{user?.username?.[0]?.toUpperCase() || 'C'}</div>
+            <div className="avatar">
+                {user?.name?.charAt(0) || 'U'}
+            </div>
             <div className="user-details">
-              <span className="name">Chief Engineer</span>
-              <span className="role">Vessel Admin</span>
+              {/* REAL USER DATA */}
+              <span className="name">{user?.name || 'Crew Member'}</span>
+              <span className="role">{user?.job_title || user?.role}</span>
             </div>
           </div>
-          <button onClick={handleLogout} className="logout-btn"><LogOut size={18} /></button>
+          <button onClick={handleLogout} className="logout-btn" title="Logout">
+            <LogOut size={18} />
+          </button>
         </div>
       </aside>
 
@@ -128,12 +109,11 @@ const VesselLayout = () => {
         <header className="vessel-header">
           <div className="sync-status">
             <Wifi size={16} className="text-success" />
-            <span>Connected to Local Server</span>
+            <span>Connected to Cloud</span>
           </div>
 
           <div className="header-actions" ref={notifRef}>
             
-            {/* BELL BUTTON */}
             <button 
               className={`icon-btn notification-btn ${showNotifications ? 'active' : ''}`}
               onClick={() => setShowNotifications(!showNotifications)}
@@ -142,65 +122,20 @@ const VesselLayout = () => {
               <span className="badge-count">2</span>
             </button>
 
-            {/* --- NOTIFICATION POPUP --- */}
+            {/* NOTIFICATION POPUP (Static for now) */}
             {showNotifications && (
               <div className="notification-dropdown">
-                
-                {/* Header */}
                 <div className="notif-header">
-                  <h3>Notification</h3>
-                  <div className="notif-actions">
-                    <button><Settings size={16} /></button>
-                    <button onClick={() => setShowNotifications(false)}><X size={16} /></button>
-                  </div>
+                  <h3>Notifications</h3>
+                  <button onClick={() => setShowNotifications(false)}><X size={16} /></button>
                 </div>
-
-                {/* Tabs */}
-                <div className="notif-tabs">
-                  <button className="active">View all</button>
-                  <button>Mentions</button>
-                  <button>Unread (2)</button>
-                  <span className="mark-read">Mark all as read</span>
-                </div>
-
-                {/* List */}
                 <div className="notif-list">
-                  {notifications.map((notif) => (
-                    <div key={notif.id} className={`notif-item ${notif.unread ? 'unread' : ''}`}>
-                      
-                      {/* Unread Dot */}
-                      {notif.unread && <span className="blue-dot"></span>}
-
-                      {/* Avatar */}
-                      <div className="notif-avatar" style={{backgroundColor: notif.avatarColor}}>
-                        {notif.user.charAt(0)}
-                      </div>
-
-                      {/* Content */}
+                   <div className="notif-item unread">
                       <div className="notif-content">
-                        <p>
-                          <span className="notif-user">{notif.user}</span> 
-                          <span className="notif-text"> {notif.text}</span>
-                        </p>
-                        
-                        {notif.subtext && <p className="notif-subtext">{notif.subtext}</p>}
-                        
-                        {/* File Attachment Styling */}
-                        {notif.hasFile && (
-                          <div className="notif-file">
-                            <FileText size={14} />
-                            <span>Design_requirements.pdf</span>
-                          </div>
-                        )}
-                        
-                        <span className="notif-time">{notif.time}</span>
+                        <p><span className="notif-user">System</span> Welcome to DRS Cloud.</p>
+                        <span className="notif-time">Just now</span>
                       </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="notif-footer">
-                  <button>View all notifications</button>
+                   </div>
                 </div>
               </div>
             )}

@@ -3,17 +3,18 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, Clock, ClipboardList, MessageSquare,
-  ChevronDown, ChevronUp, Trash2, Edit, CheckCircle, X,
-  Filter, RotateCcw, Send, Paperclip, Download
+  ChevronDown, ChevronUp, Trash2, Edit, CheckCircle,
+  Filter, RotateCcw, Paperclip, Download
 } from 'lucide-react';
 import { defectApi } from '../../services/defectApi';
 import { blobUploadService } from '../../services/blobUploadService';
 import { generateId } from '../../services/idGenerator';
+import { useAuth } from '../../context/AuthContext'; // <--- IMPORT AUTH
 import './Vessel.css';
 
 /**
  * SUB-COMPONENT: ThreadSection
- * Handles the real-time chat inside your existing Modal structure
+ * (Handles Chat - No changes needed here logic-wise)
  */
 const ThreadSection = ({ defectId }) => {
   const queryClient = useQueryClient();
@@ -43,7 +44,7 @@ const ThreadSection = ({ defectId }) => {
       }
       await defectApi.createThread({
         id: threadId, defect_id: defectId,
-        author: "Chief Engineer", // Context-driven
+        author: "Chief Engineer", 
         body: replyText
       });
       for (const meta of uploadedAttachments) {
@@ -103,6 +104,11 @@ const ThreadSection = ({ defectId }) => {
 
 const VesselDashboard = () => {
   const navigate = useNavigate();
+  const { user } = useAuth(); // <--- GET USER CONTEXT
+
+  // --- GET ASSIGNED VESSEL IMO ---
+  // Since 'assignedVessels' is an array of strings like ['9832913']
+  const vesselImo = user?.assignedVessels?.[0] || '';
 
   // --- STATES ---
   const [expandedRow, setExpandedRow] = useState(null);
@@ -110,10 +116,11 @@ const VesselDashboard = () => {
   const [statusFilter, setStatusFilter] = useState('All');
   const [priorityFilter, setPriorityFilter] = useState('High,Critical');
 
-  // --- API QUERY ---
+  // --- API QUERY (FILTERED BY IMO) ---
   const { data: defects = [], isLoading } = useQuery({
-    queryKey: ['defects', 'vessel-list'],
-    queryFn: () => defectApi.getDefects()
+    queryKey: ['defects', vesselImo], // Unique cache key per ship
+    queryFn: () => defectApi.getDefects(vesselImo), // Pass IMO to API
+    enabled: !!vesselImo // Only run if we have an IMO
   });
 
   // --- KPI CALCULATIONS ---
@@ -133,12 +140,12 @@ const VesselDashboard = () => {
   // --- ACTIONS ---
   const toggleExpand = (id) => {
     setExpandedRow(expandedRow === id ? null : id);
-    setOpenThreadRow(null); // Close thread when expanding details
+    setOpenThreadRow(null);
   };
 
   const toggleThread = (id) => {
     setOpenThreadRow(openThreadRow === id ? null : id);
-    setExpandedRow(null); // Close details when opening thread
+    setExpandedRow(null);
   };
 
   const handleEdit = (defect) => {
@@ -152,11 +159,14 @@ const VesselDashboard = () => {
 
   if (isLoading) return <div className="dashboard-container">Loading Cloud Data...</div>;
 
+  // Handle case where user has no assigned ship
+  if (!vesselImo) return <div className="dashboard-container"><h3>No Vessel Assigned to this User.</h3></div>;
+
   return (
     <div className="dashboard-container">
       <h1 className="page-title">Vessel Overview</h1>
 
-      {/* KPI CARDS (Fully Restored) */}
+      {/* KPI CARDS */}
       <div className="kpi-grid">
         <div className="kpi-card blue">
           <div className="kpi-icon"><AlertTriangle size={24} /></div>
@@ -176,7 +186,7 @@ const VesselDashboard = () => {
         </div>
       </div>
 
-      {/* --- FILTER BAR HEADER (Fully Restored) --- */}
+      {/* --- FILTER BAR --- */}
       <div className="section-header-with-filters">
         <h3>Active Defects ({filteredDefects.length})</h3>
 
@@ -206,7 +216,7 @@ const VesselDashboard = () => {
         </div>
       </div>
 
-      {/* --- TABLE (Fully Restored) --- */}
+      {/* --- TABLE --- */}
       <div className="table-card">
         <table className="data-table">
           <thead>
@@ -249,7 +259,7 @@ const VesselDashboard = () => {
                     </td>
                   </tr>
 
-                  {/* EXPANDED DETAILS (Fully Restored) */}
+                  {/* EXPANDED DETAILS */}
                   {expandedRow === defect.id && (
                     <tr className="detail-row">
                       <td colSpan="7">
