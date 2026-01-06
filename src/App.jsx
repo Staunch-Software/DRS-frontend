@@ -19,7 +19,7 @@ import ShoreDashboard from './features/shore/ShoreDashboard';
 import ShoreTasks from './features/shore/ShoreTasks';
 import ShoreHistory from './features/shore/ShoreHistory';
 import ShoreVesselData from './features/shore/ShoreVesselData';
-import AdminUserPanel from './features/shore/AdminUserPanel'; // <--- 1. IMPORT THIS
+import AdminUserPanel from './features/shore/AdminUserPanel';
 
 function App() {
   return (
@@ -28,9 +28,9 @@ function App() {
         <Routes>
           <Route path="/login" element={<Login />} />
 
-          {/* VESSEL ROUTES */}
+          {/* --- VESSEL ROUTES (Crew Only) --- */}
           <Route path="/vessel" element={
-            <ProtectedRoute allowedRole="VESSEL">
+            <ProtectedRoute allowedRoles={['VESSEL']}>
               <VesselLayout />
             </ProtectedRoute>
           }>
@@ -41,9 +41,9 @@ function App() {
             <Route path="history" element={<VesselHistory />} />
           </Route>
 
-          {/* SHORE ROUTES */}
+          {/* --- SHORE ROUTES (Shore Staff + Admins) --- */}
           <Route path="/shore" element={
-            <ProtectedRoute allowedRole="SHORE">
+            <ProtectedRoute allowedRoles={['SHORE', 'ADMIN']}> 
               <ShoreLayout />
             </ProtectedRoute>
           }>
@@ -53,8 +53,12 @@ function App() {
             <Route path="tasks" element={<ShoreTasks />} />
             <Route path="history" element={<ShoreHistory />} />
             
-            {/* 2. ADD THIS ROUTE */}
-            <Route path="admin/users" element={<AdminUserPanel />} />
+            {/* --- ADMIN PANEL (Strictly Admin Only) --- */}
+            <Route path="admin/users" element={
+              <ProtectedRoute allowedRoles={['ADMIN']}>
+                <AdminUserPanel />
+              </ProtectedRoute>
+            } />
             
           </Route>
 

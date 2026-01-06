@@ -1,23 +1,35 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../../context/AuthContext';
-import { LifeBuoy, Server, Info } from 'lucide-react'; 
 import './Login.css';
 
 const Login = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
   
   const { login } = useAuth();
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => { // <--- 1. Mark function as ASYNC
     e.preventDefault();
     setError('');
-    const result = login(username, password);
+    setIsLoading(true);
+
+    // <--- 2. Wait for the API response
+    const result = await login(username, password); 
+    
+    setIsLoading(false);
+
     if (result.success) {
-      navigate(result.role === 'VESSEL' ? '/vessel' : '/shore');
+      // <--- 3. Redirect based on Role
+      if (result.role === 'VESSEL') {
+        navigate('/vessel/dashboard');
+      } else {
+        // ADMIN and SHORE go to the same dashboard
+        navigate('/shore/dashboard'); 
+      }
     } else {
       setError(result.message);
     }
@@ -30,13 +42,10 @@ const Login = () => {
         {/* LEFT SIDE: Branding */}
         <div className="info-side">
           <h1>Defect <br /> Reporting <br /> System</h1>
-          
           <p className="description">
             Streamlined maintenance tracking for the global fleet. 
             Sync onboard inspections with shore management instantly.
           </p>
-          
-         
         </div>
 
         {/* RIGHT SIDE: Form */}
@@ -47,12 +56,12 @@ const Login = () => {
 
           <form onSubmit={handleLogin}>
             <div className="input-group">
-              <label>User ID</label>
+              <label>Email Address</label>
               <input 
                 type="text" 
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. chief"
+                placeholder="admin@drs.com"
                 required 
               />
             </div>
@@ -68,34 +77,19 @@ const Login = () => {
               />
             </div>
 
-            <div className="form-options">
-              <label className="checkbox-container">
-                <input type="checkbox" />
-                <span className="checkmark"></span>
-                Remember Me
-              </label>
-              <a href="#" className="forgot-link">Forgot Password?</a>
-            </div>
-
-            <button type="submit" className="signin-btn">
-              Sign in now
+            <button type="submit" className="signin-btn" disabled={isLoading}>
+              {isLoading ? 'Signing in...' : 'Sign in now'}
             </button>
 
-            {/* SMALLER DEMO CARD */}
+            {/* Hint for you (Remove in production) */}
             <div className="creds-hint">
-              <span className="hint-title">Demo Access:</span>
+              <span className="hint-title">Database Logins:</span>
               <div className="hint-row">
-                <span>Vessel: <code>chief</code>/<code>12345</code></span>
-                <span>Shore: <code>manager</code>/<code>12345</code></span>
+                <span>Admin: <code>admin@drs.com</code> / <code>12345</code></span>
+                <span>Shore: <code>manager@drs.com</code> / <code>12345</code></span>
               </div>
             </div>
 
-            <div className="form-footer">
-              <p>
-                By clicking "Sign in now" you agree to our <br/>
-                <a href="#">Terms of Service</a> & <a href="#">Privacy Policy</a>
-              </p>
-            </div>
           </form>
         </div>
 

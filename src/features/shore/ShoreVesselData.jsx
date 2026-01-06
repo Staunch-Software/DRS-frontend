@@ -2,43 +2,46 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { createVessel, getVessels } from '../../api/vessels';
 import { getDefects } from '../../api/defects';
+import { useAuth } from '../../context/AuthContext'; // <--- Import Auth for Permissions
 import { 
   MessageSquare, CheckCircle, Plus, X, Ship, Mail, Filter, 
-  Search, ChevronDown, Check
+  Search, ChevronDown, Check, AlertCircle 
 } from 'lucide-react';
 
 const ShoreVesselData = () => {
+  const { user } = useAuth(); // <--- Get current user info
   const queryClient = useQueryClient();
   const dropdownRef = useRef(null);
   
-  // --- STATE ---
+  // --- UI STATE ---
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [isFilterOpen, setIsFilterOpen] = useState(false); // Toggle Dropdown
-  const [vesselSearch, setVesselSearch] = useState('');    // Search inside dropdown
-  const [selectedImos, setSelectedImos] = useState([]);    // Array of selected IMOs
+  const [isFilterOpen, setIsFilterOpen] = useState(false);
+  const [vesselSearch, setVesselSearch] = useState('');
+  
+  // --- FILTER STATE ---
+  const [selectedImos, setSelectedImos] = useState([]);
 
-  // --- QUERY 1: FETCH VESSELS ---
+  // --- QUERY 1: FETCH VESSELS (For Dropdown & Mapping) ---
   const { data: vesselList = [] } = useQuery({
     queryKey: ['vessels'],
     queryFn: getVessels
   });
 
-  // --- QUERY 2: FETCH ALL DEFECTS ---
-  // We fetch ALL defects (empty string) and filter them in the UI using checkboxes
+  // --- QUERY 2: FETCH ALL DEFECTS (For Table) ---
   const { data: allDefects = [], isLoading: isDefectsLoading } = useQuery({
     queryKey: ['defects', 'all'], 
     queryFn: () => getDefects('') 
   });
 
   // --- EFFECT: DEFAULT SELECT ALL ---
-  // When vessels load, auto-select all of them
+  // When vessels load, select all of them by default
   useEffect(() => {
     if (vesselList.length > 0 && selectedImos.length === 0) {
       setSelectedImos(vesselList.map(v => v.imo_number));
     }
   }, [vesselList]);
 
-  // --- EFFECT: CLICK OUTSIDE TO CLOSE DROPDOWN ---
+  // --- EFFECT: CLICK OUTSIDE DROPDOWN TO CLOSE ---
   useEffect(() => {
     const handleClickOutside = (event) => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
@@ -48,7 +51,6 @@ const ShoreVesselData = () => {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
-
 
   // --- FILTER LOGIC ---
   const toggleVessel = (imo) => {
@@ -72,7 +74,7 @@ const ShoreVesselData = () => {
     v.name.toLowerCase().includes(vesselSearch.toLowerCase())
   );
 
-  // Filter the DEFECTS shown in the TABLE
+  // Filter the DEFECTS shown in the TABLE based on selection
   const filteredDefects = allDefects.filter(defect => 
     selectedImos.includes(defect.vessel_imo)
   );
@@ -95,7 +97,10 @@ const ShoreVesselData = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if(formData.imo_number.length !== 7) return alert("IMO Number must be exactly 7 digits.");
+    if(formData.imo_number.length !== 7) {
+      alert("IMO Number must be exactly 7 digits.");
+      return;
+    }
     addVesselMutation.mutate(formData);
   };
 
@@ -116,7 +121,7 @@ const ShoreVesselData = () => {
           {/* --- CUSTOM MULTI-SELECT DROPDOWN --- */}
           <div className="custom-dropdown-container" ref={dropdownRef} style={{position:'relative'}}>
             
-            {/* The Button */}
+            {/* The Trigger Button */}
             <button 
               className="filter-btn" 
               onClick={() => setIsFilterOpen(!isFilterOpen)}
@@ -135,7 +140,7 @@ const ShoreVesselData = () => {
               <ChevronDown size={14} color="#64748b"/>
             </button>
 
-            {/* The Dropdown Content */}
+            {/* The Dropdown Menu */}
             {isFilterOpen && (
               <div className="dropdown-menu" style={{
                 position:'absolute', top:'45px', right:'0', width:'280px',
@@ -143,7 +148,7 @@ const ShoreVesselData = () => {
                 borderRadius:'8px', zIndex: 100, padding:'10px'
               }}>
                 
-                {/* Search Bar */}
+                {/* Search Bar inside Dropdown */}
                 <div style={{position:'relative', marginBottom:'10px'}}>
                   <Search size={14} style={{position:'absolute', left:'10px', top:'9px', color:'#94a3b8'}}/>
                   <input 
@@ -152,16 +157,16 @@ const ShoreVesselData = () => {
                     value={vesselSearch}
                     onChange={(e) => setVesselSearch(e.target.value)}
                     style={{
-                      width:'80%', padding:'6px 10px 6px 30px', 
+                      width:'100%', padding:'6px 10px 6px 30px', 
                       border:'1px solid #e2e8f0', borderRadius:'6px', fontSize:'13px'
                     }}
                   />
                 </div>
 
-                {/* List */}
+                {/* List Container */}
                 <div style={{maxHeight:'200px', overflowY:'auto'}}>
                   
-                  {/* Select All */}
+                  {/* Select All Option */}
                   <div 
                     onClick={toggleSelectAll}
                     style={{
@@ -183,7 +188,7 @@ const ShoreVesselData = () => {
 
                   <div style={{height:'1px', background:'#e2e8f0', margin:'5px 0'}}></div>
 
-                  {/* Individual Ships */}
+                  {/* Individual Ship Options */}
                   {dropdownVessels.map(v => {
                     const isSelected = selectedImos.includes(v.imo_number);
                     return (
@@ -216,13 +221,16 @@ const ShoreVesselData = () => {
             )}
           </div>
 
-          <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
-            <Plus size={16} /> Register Vessel
-          </button>
+          {/* --- REGISTER VESSEL BUTTON (Only for Admin) --- */}
+          {user?.role === 'ADMIN' && (
+            <button className="btn-primary" onClick={() => setIsModalOpen(true)}>
+              <Plus size={16} /> Register Vessel
+            </button>
+          )}
         </div>
       </div>
 
-      {/* --- TABLE --- */}
+      {/* --- DEFECT TABLE --- */}
       <div className="table-card">
         <table className="data-table">
           <thead>
@@ -243,7 +251,7 @@ const ShoreVesselData = () => {
                <tr>
                  <td colSpan="7" style={{textAlign:'center', padding:'40px', color: '#64748b'}}>
                    <CheckCircle size={24} style={{marginBottom:'10px', color:'#10b981'}}/>
-                   <br/>No defects found.
+                   <br/>No defects match your filter.
                  </td>
                </tr>
              )}
@@ -251,7 +259,10 @@ const ShoreVesselData = () => {
              {filteredDefects.map((defect) => (
                <tr key={defect.id}>
                  <td style={{fontFamily:'monospace', fontSize:'12px', color:'#64748b'}}>{defect.id.substring(0,8)}...</td>
-                 <td style={{fontWeight:'600'}}>{defect.vessel_name || defect.vessel_imo}</td>
+                 <td style={{fontWeight:'600'}}>
+                    {/* Handle simple string or object response from backend */}
+                    {defect.vessel_name || defect.vessel_imo}
+                 </td>
                  <td>{defect.equipment_name || defect.equipment}</td>
                  <td>{defect.title}</td>
                  <td><span className={`badge ${defect.priority.toLowerCase()}`}>{defect.priority}</span></td>
@@ -263,35 +274,69 @@ const ShoreVesselData = () => {
         </table>
       </div>
 
-      {/* --- MODAL --- */}
-      {isModalOpen && (
+      {/* --- REGISTER VESSEL MODAL --- */}
+      {isModalOpen && user?.role === 'ADMIN' && (
         <div className="modal-overlay">
           <div className="modal-content" style={{width: '450px'}}>
             <div className="modal-header">
               <h3><Ship size={18} style={{marginRight:'8px'}}/> Register New Vessel</h3>
               <button onClick={() => setIsModalOpen(false)}><X size={20} /></button>
             </div>
+            
             <form onSubmit={handleSubmit} className="modal-body">
               <div className="form-group">
-                <label>IMO Number</label>
-                <input className="input-field" maxLength={7} placeholder="9792058" value={formData.imo_number} onChange={(e) => setFormData({...formData, imo_number: e.target.value.replace(/\D/g,'')})} required />
+                <label>IMO Number (Unique 7-digit)</label>
+                <input 
+                  className="input-field" 
+                  maxLength={7} 
+                  placeholder="9792058" 
+                  value={formData.imo_number} 
+                  onChange={(e) => setFormData({...formData, imo_number: e.target.value.replace(/\D/g,'')})} 
+                  required 
+                />
               </div>
+
               <div className="form-group">
                 <label>Vessel Name</label>
-                <input className="input-field" placeholder="A.M. UMANG" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value.toUpperCase()})} required />
+                <input 
+                  className="input-field" 
+                  placeholder="e.g. A.M. UMANG" 
+                  value={formData.name} 
+                  onChange={(e) => setFormData({...formData, name: e.target.value.toUpperCase()})} 
+                  required 
+                />
               </div>
+
               <div className="form-group">
                 <label>Vessel Type</label>
-                <select className="input-field" value={formData.vessel_type} onChange={(e) => setFormData({...formData, vessel_type: e.target.value})}>
-                  <option>Bulk Carrier</option><option>Oil Tanker</option><option>Container Ship</option>
+                <select 
+                  className="input-field" 
+                  value={formData.vessel_type} 
+                  onChange={(e) => setFormData({...formData, vessel_type: e.target.value})}
+                >
+                  <option>Bulk Carrier</option>
+                  <option>Oil Tanker</option>
+                  <option>Container Ship</option>
+                  <option>LNG Carrier</option>
+                  <option>General Cargo</option>
                 </select>
               </div>
+
               <div className="form-group">
                 <label><Mail size={14} style={{verticalAlign:'middle'}}/> Ship Email</label>
-                <input type="email" className="input-field" placeholder="email@ship.com" value={formData.email} onChange={(e) => setFormData({...formData, email: e.target.value})} />
+                <input 
+                  type="email" 
+                  className="input-field" 
+                  placeholder="email@ship.com" 
+                  value={formData.email} 
+                  onChange={(e) => setFormData({...formData, email: e.target.value})} 
+                />
               </div>
+
               <div className="modal-footer" style={{borderTop:'none', padding:'0', marginTop:'20px'}}>
-                <button type="submit" className="btn-primary" style={{width:'100%'}}>Confirm Registration</button>
+                <button type="submit" className="btn-primary" style={{width:'100%'}} disabled={addVesselMutation.isPending}>
+                  {addVesselMutation.isPending ? 'Registering...' : 'Confirm Registration'}
+                </button>
               </div>
             </form>
           </div>
