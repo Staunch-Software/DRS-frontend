@@ -5,7 +5,8 @@ const API_BASE = CONFIG.API_BASE_URL;
 
 // Helper to get the token (matches your localStorage key from the screenshot)
 const getAuthHeader = () => {
-  const token = localStorage.getItem('accessToken') || localStorage.getItem('token');
+  // Matches the key 'drs_token' used in your AuthContext.jsx
+  const token = localStorage.getItem('drs_token'); 
   return token ? { 'Authorization': `Bearer ${token}` } : {};
 };
 

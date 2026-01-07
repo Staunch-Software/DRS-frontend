@@ -1,102 +1,189 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom'; // <--- Removed useOutletContext
-import { 
-  AlertTriangle, Clock, ClipboardList, MessageSquare, 
-  ChevronDown, ChevronUp, CheckCircle, ShieldAlert
+import { useNavigate } from 'react-router-dom';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import {
+  AlertTriangle, Clock, ClipboardList, MessageSquare,
+  ChevronDown, ChevronUp, CheckCircle, ShieldAlert, Send, Paperclip, Download
 } from 'lucide-react';
+
+// Phase 1 Services
+import { defectApi } from '../../services/defectApi';
+import { blobUploadService } from '../../services/blobUploadService';
+import { generateId } from '../../services/idGenerator';
+
+/**
+ * SUB-COMPONENT: ThreadSection
+ * Handles the conversation and replies for the Shore UI
+ */
+const ThreadSection = ({ defectId }) => {
+  const queryClient = useQueryClient();
+  const [replyText, setReplyText] = useState("");
+  const [files, setFiles] = useState([]);
+  const [isUploading, setIsUploading] = useState(false);
+
+  // 1. Fetch Threads
+  const { data: threads = [], isLoading } = useQuery({
+    queryKey: ['threads', defectId],
+    queryFn: () => defectApi.getThreads(defectId),
+    enabled: !!defectId
+  });
+
+  // 2. Reply Logic (Blob-First)
+  const handleReply = async () => {
+    if (!replyText && files.length === 0) return;
+    setIsUploading(true);
+
+    try {
+      const threadId = generateId();
+      const uploadedAttachments = [];
+
+      // A. Upload to Azure FIRST
+      for (const file of files) {
+        const attachmentId = generateId();
+        const path = await blobUploadService.uploadBinary(file, defectId, attachmentId);
+        uploadedAttachments.push({
+          id: attachmentId,
+          thread_id: threadId,
+          file_name: file.name,
+          file_size: file.size,
+          content_type: file.type,
+          blob_path: path
+        });
+      }
+
+      // B. Save Thread Metadata
+      await defectApi.createThread({
+        id: threadId,
+        defect_id: defectId,
+        author: "Superintendent", // In production, this comes from AuthContext
+        body: replyText
+      });
+
+      // C. Save Attachment Metadata
+      for (const meta of uploadedAttachments) {
+        await defectApi.createAttachment(meta);
+      }
+
+      setReplyText("");
+      setFiles([]);
+      queryClient.invalidateQueries(['threads', defectId]);
+    } catch (err) {
+      alert("Failed to send reply: " + err.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  if (isLoading) return <div style={{ padding: '20px', color: '#64748b' }}>Loading conversation...</div>;
+
+  return (
+    <div className="thread-section-wrapper" style={{ padding: '20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+      <div className="thread-history" style={{ marginBottom: '20px' }}>
+        {threads.length === 0 ? (
+          <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>No messages yet.</p>
+        ) : (
+          threads.map(t => (
+            <div key={t.id} className="chat-msg" style={{ marginBottom: '15px', padding: '12px', background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px' }}>
+                <strong style={{ fontSize: '13px' }}>{t.author}</strong>
+                <span style={{ fontSize: '11px', color: '#94a3b8' }}>{new Date(t.created_at).toLocaleString()}</span>
+              </div>
+              <p style={{ fontSize: '14px', margin: 0 }}>{t.body}</p>
+              {t.attachments?.map(a => (
+                <a key={a.id} href={a.blob_path} target="_blank" rel="noreferrer" style={{ display: 'block', fontSize: '12px', color: '#3b82f6', marginTop: '5px', textDecoration: 'none' }}>
+                  <Download size={12} /> {a.file_name}
+                </a>
+              ))}
+            </div>
+          ))
+        )}
+      </div>
+
+      <div className="reply-box">
+        <textarea
+          className="input-field"
+          placeholder="Type a reply to the vessel..."
+          value={replyText}
+          onChange={(e) => setReplyText(e.target.value)}
+          style={{ width: '100%', minHeight: '80px', marginBottom: '10px' }}
+        />
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: '#64748b' }}>
+            <Paperclip size={16} />
+            <input type="file" multiple hidden onChange={(e) => setFiles(Array.from(e.target.files))} />
+            {files.length > 0 ? `${files.length} files attached` : 'Attach Files'}
+          </label>
+          <button className="btn-primary" onClick={handleReply} disabled={isUploading}>
+            <Send size={16} /> {isUploading ? 'Sending...' : 'Send Reply'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
 
 const ShoreDashboard = () => {
   const navigate = useNavigate();
-  // const { selectedVessels } = useOutletContext(); <--- REMOVED (This caused the crash)
   const [expandedRow, setExpandedRow] = useState(null);
+  const [openThreadRow, setOpenThreadRow] = useState(null);
 
-  // --- MOCK DATA (With Full Details) ---
-  const allDefects = [
-    { 
-      id: 'DEF-101', vesselId: 'v1', vesselName: 'MT ALFA', 
-      equipment: 'Main Engine #1', title: 'Fuel Pump Leak', 
-      priority: 'Critical', status: 'Open', date: '2025-10-26', 
-      comments: 4, 
-      description: 'Heavy leakage observed near cylinder head during rounds. Risk of fire if not isolated immediately.', 
-      remarks: 'Spares ordered. Temporary patch applied. Monitoring closely.',
-      responsibility: 'Engine Dept'
-    },
-    { 
-      id: 'DEF-205', vesselId: 'v2', vesselName: 'MT BRAVO', 
-      equipment: 'Ballast Pump A', title: 'Vibration Alarm', 
-      priority: 'High', status: 'In Progress', date: '2025-10-25', 
-      comments: 1, 
-      description: 'Vibration sensor reading > 12mm/s. Mounting bolts checked and found loose.', 
-      remarks: 'Foundation bolts tightened. Vibration reduced to 8mm/s. Further monitoring required.',
-      responsibility: 'Engine Dept'
-    },
-    { 
-      id: 'DEF-303', vesselId: 'v3', vesselName: 'MT CHARLIE', 
-      equipment: 'X-Band Radar', title: 'Magnetron Failure', 
-      priority: 'Medium', status: 'Open', date: '2025-10-24', 
-      comments: 2, 
-      description: 'Radar picture very weak. Tuning check failed. Magnetron hours > 8000.', 
-      remarks: 'Spare magnetron requested via PR-992. Using S-Band for now.',
-      responsibility: 'Deck/Electrical'
-    },
-    { 
-      id: 'DEF-102', vesselId: 'v1', vesselName: 'MT ALFA', 
-      equipment: 'OWS', title: '15ppm Alarm', 
-      priority: 'High', status: 'Open', date: '2025-10-23', 
-      comments: 0, 
-      description: '15ppm alarm sounding continuously even with clean water.', 
-      remarks: 'Sensor cleaning attempted. Calibration check pending.',
-      responsibility: 'Engine Dept'
-    },
-    { 
-      id: 'DEF-404', vesselId: 'v4', vesselName: 'MT DELTA', 
-      equipment: 'Generator #2', title: 'Low Oil Pressure', 
-      priority: 'Critical', status: 'Open', date: '2025-10-22', 
-      comments: 5, 
-      description: 'Engine tripped on Low L.O. Pressure. Sump level normal.', 
-      remarks: 'Filter opened, found metal particles. Bearing inspection required.',
-      responsibility: 'Engine Dept'
-    }
-  ];
+  // --- QUERY: FETCH ALL DEFECTS ---
+  const { data: defects = [], isLoading } = useQuery({
+    queryKey: ['defects', 'global-list'],
+    queryFn: () => defectApi.getDefects()
+  });
 
-  // 1. FILTER: Since Sidebar filter is gone, we show ALL defects (Global Overview)
-  const filteredDefects = allDefects; 
+  // --- KPI CALCULATIONS (Dynamic) ---
+  const openCount = defects.filter(d => d.status === 'OPEN').length;
+  const inProgressCount = defects.filter(d => d.status === 'IN_PROGRESS').length;
+  const highPriorityCount = defects.filter(d => d.priority === 'HIGH' || d.priority === 'CRITICAL').length;
 
-  // 2. SLICE (Show only latest 5)
-  const latestDefects = filteredDefects.slice(0, 5);
+  // --- LATEST 5 LOGIC ---
+  const latestDefects = [...defects]
+    .sort((a, b) => new Date(b.created_at) - new Date(a.created_at))
+    .slice(0, 5);
 
-  const toggleExpand = (id) => setExpandedRow(expandedRow === id ? null : id);
+  const toggleExpand = (id) => {
+    setExpandedRow(expandedRow === id ? null : id);
+    setOpenThreadRow(null); // Close thread when expanding details
+  };
+
+  const toggleThread = (id) => {
+    setOpenThreadRow(openThreadRow === id ? null : id);
+    setExpandedRow(null); // Close details when opening thread
+  };
+  if (isLoading) return <div className="dashboard-container">Loading Fleet Overview...</div>;
 
   return (
     <div className="dashboard-container">
       <h1 className="page-title">Fleet Overview</h1>
 
-      {/* KPI CARDS */}
+      {/* KPI CARDS (Now Dynamic) */}
       <div className="kpi-grid">
         <div className="kpi-card blue">
           <div className="kpi-icon"><AlertTriangle size={24} /></div>
           <div className="kpi-data">
-            <h2>{filteredDefects.filter(d => d.status === 'Open').length}</h2>
+            <h2>{openCount}</h2>
             <p>Open Defects</p>
           </div>
         </div>
-        
+
         <div className="kpi-card orange">
           <div className="kpi-icon"><Clock size={24} /></div>
           <div className="kpi-data">
-            <h2>{filteredDefects.filter(d => d.status === 'In Progress').length}</h2>
+            <h2>{inProgressCount}</h2>
             <p>In Progress</p>
           </div>
         </div>
-        
+
         <div className="kpi-card red">
           <div className="kpi-icon"><AlertTriangle size={24} /></div>
           <div className="kpi-data">
-            <h2>{filteredDefects.filter(d => d.priority === 'Critical' || d.priority === 'High').length}</h2>
+            <h2>{highPriorityCount}</h2>
             <p>High Priority</p>
           </div>
         </div>
-        
+
         <div className="kpi-card green clickable-card" onClick={() => navigate('/shore/tasks')}>
           <div className="kpi-icon"><ClipboardList size={24} /></div>
           <div className="kpi-data"><h2>5</h2><p>My Tasks</p></div>
@@ -111,8 +198,8 @@ const ShoreDashboard = () => {
         <table className="data-table">
           <thead>
             <tr>
-              <th>Vessel</th>
-              <th>ID</th>
+              <th>Vessel Name</th>
+              <th>IMO</th>
               <th>Equipment</th>
               <th>Defect Title</th>
               <th>Priority</th>
@@ -126,16 +213,15 @@ const ShoreDashboard = () => {
               <React.Fragment key={defect.id}>
                 {/* MAIN ROW */}
                 <tr className={expandedRow === defect.id ? 'expanded-active' : ''}>
-                  <td style={{fontWeight: 'bold', color: '#0f172a'}}>{defect.vesselName}</td>
-                  <td className="id-cell">{defect.id}</td>
-                  <td>{defect.equipment}</td>
+                  <td style={{ fontWeight: 'bold', color: '#0f172a' }}>{defect.vessel_name || 'Unknown'}</td>
+                  <td style={{ fontFamily: 'monospace', fontSize: '13px', color: '#64748b' }}>{defect.vessel_imo}</td>
+                  <td>{defect.equipment_name}</td>
                   <td className="title-cell">{defect.title}</td>
                   <td><span className={`badge badge-${defect.priority.toLowerCase()}`}>{defect.priority}</span></td>
-                  <td><span className={`status-dot ${defect.status.toLowerCase().replace(' ', '-')}`}></span>{defect.status}</td>
+                  <td><span className={`status-dot ${defect.status.toLowerCase().replace('_', '-')}`}></span>{defect.status.replace('_', ' ')}</td>
                   <td>
-                    <button className="thread-btn">
+                    <button className="thread-btn" onClick={(e) => { e.stopPropagation(); toggleThread(defect.id); }}>
                       <MessageSquare size={16} />
-                      {defect.comments > 0 && <span className="msg-count">{defect.comments}</span>}
                     </button>
                   </td>
                   <td>
@@ -145,34 +231,33 @@ const ShoreDashboard = () => {
                   </td>
                 </tr>
 
-                {/* --- DETAILED EXPANDED VIEW --- */}
+                {/* EXPANDED DETAILS - WITHOUT THREAD */}
                 {expandedRow === defect.id && (
                   <tr className="detail-row">
-                    <td colSpan="8">
+                    <td colSpan="8" style={{ padding: 0 }}>
                       <div className="detail-content">
-                        
                         {/* 1. INFO GRID */}
-                        <div className="detail-grid">
+                        <div className="detail-grid" style={{ padding: '20px' }}>
                           <div>
-                            <strong>Description:</strong> 
+                            <strong>Description:</strong>
                             <p>{defect.description}</p>
                           </div>
                           <div>
-                            <strong>Ship Remarks:</strong> 
-                            <p>{defect.remarks}</p>
+                            <strong>Ship Remarks:</strong>
+                            <p>{defect.ships_remarks || 'No remarks provided.'}</p>
                           </div>
                           <div>
-                            <strong>Responsibility:</strong> 
+                            <strong>Responsibility:</strong>
                             <p>{defect.responsibility || 'Not Assigned'}</p>
                           </div>
                           <div>
-                            <strong>Reported Date:</strong> 
-                            <p>{defect.date}</p>
+                            <strong>Reported Date:</strong>
+                            <p>{new Date(defect.date_identified).toLocaleDateString()}</p>
                           </div>
                         </div>
 
                         {/* 2. ACTION BUTTONS */}
-                        <div className="detail-actions">
+                        <div className="detail-actions" style={{ padding: '20px', borderTop: '1px solid #e2e8f0' }}>
                           <button className="btn-action close-task">
                             <CheckCircle size={16} /> Approve Closure
                           </button>
@@ -180,14 +265,24 @@ const ShoreDashboard = () => {
                             <ShieldAlert size={16} /> Raise Priority
                           </button>
                         </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
 
+                {/* THREAD ROW - SEPARATE */}
+                {openThreadRow === defect.id && (
+                  <tr className="detail-row">
+                    <td colSpan="8" style={{ padding: 0 }}>
+                      <div className="detail-content">
+                        <ThreadSection defectId={defect.id} />
                       </div>
                     </td>
                   </tr>
                 )}
               </React.Fragment>
             )) : (
-              <tr><td colSpan="8" style={{textAlign:'center', padding:'20px'}}>No defects found.</td></tr>
+              <tr><td colSpan="8" style={{ textAlign: 'center', padding: '20px' }}>No defects found in the cloud database.</td></tr>
             )}
           </tbody>
         </table>

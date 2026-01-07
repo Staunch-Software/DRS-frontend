@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { Save, Paperclip, MessageSquare, X } from 'lucide-react';
+import { useAuth } from '../../context/AuthContext';
 
 // Phase 1 Services
 import { generateId } from '../../services/idGenerator';
@@ -9,6 +10,7 @@ import { defectApi } from '../../services/defectApi';
 
 const CreateDefect = () => {
   const location = useLocation();
+  const { user } = useAuth();
   const navigate = useNavigate();
 
   const [isSaving, setIsSaving] = useState(false);
@@ -82,24 +84,15 @@ const CreateDefect = () => {
         defectId,
         initialComment,
         attachments: attachmentMeta,
-        vesselId: '9832913' // Use the IMO from your DB for testing
+        vessel_imo: user.assignedVessels[0] // <--- Use real IMO from AuthContext
       };
+
       const jsonPath = await blobUploadService.uploadMetadataJSON(fullPackage, defectId);
 
-      // STEP 3: Register in PostgreSQL via API
-      // Ensure we send the exact keys the Pydantic schema expects
       await defectApi.createDefect({
+        ...formData,
         id: defectId,
-        date: formData.date,
-        equipment: formData.equipment,
-        description: formData.description,
-        remarks: formData.remarks,
-        priority: formData.priority,
-        status: formData.status,
-        responsibility: formData.responsibility,
-        officeSupport: formData.officeSupport,
-        prNumber: formData.prNumber,
-        prStatus: formData.prStatus,
+        vessel_imo: user.assignedVessels[0], // <--- Pass the IMO to the API
         json_backup_path: jsonPath
       });
 
