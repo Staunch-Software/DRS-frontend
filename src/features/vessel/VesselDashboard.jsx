@@ -44,7 +44,7 @@ const ThreadSection = ({ defectId }) => {
       }
       await defectApi.createThread({
         id: threadId, defect_id: defectId,
-        author: "Chief Engineer", 
+        author: "Chief Engineer",
         body: replyText
       });
       for (const meta of uploadedAttachments) {
@@ -157,6 +157,35 @@ const VesselDashboard = () => {
     setPriorityFilter('High,Critical');
   };
 
+  // Inside VesselDashboard component body
+  const queryClient = useQueryClient();
+
+  const handleCloseDefect = async (id) => {
+    if (window.confirm("Are you sure you want to mark this defect as CLOSED?")) {
+      try {
+        await defectApi.closeDefect(id);
+        alert("Defect closed successfully.");
+        // Refresh the list automatically
+        queryClient.invalidateQueries(['defects', vesselImo]);
+      } catch (err) {
+        alert("Failed to close defect: " + err.message);
+      }
+    }
+  };
+
+  const handleDelete = async (id) => {
+    if (window.confirm("Are you sure you want to REMOVE this defect? It will be archived for audit purposes.")) {
+      try {
+        await defectApi.deleteDefect(id);
+        alert("Defect removed.");
+        // Refresh the list automatically
+        queryClient.invalidateQueries(['defects', vesselImo]);
+      } catch (err) {
+        alert("Failed to remove defect: " + err.message);
+      }
+    }
+  };
+  
   if (isLoading) return <div className="dashboard-container">Loading Cloud Data...</div>;
 
   // Handle case where user has no assigned ship

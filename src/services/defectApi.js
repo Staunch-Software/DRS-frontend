@@ -62,4 +62,21 @@ export const defectApi = {
     headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
     body: JSON.stringify(data),
   }).then(handleResponse),
+
+  updateDefect: (id, data) => fetch(`${API_BASE}/defects/${id}`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeader() },
+    body: JSON.stringify(data),
+  }).then(handleResponse),
+
+  closeDefect: (id) => fetch(`${API_BASE}/defects/${id}/close`, {
+    method: 'PATCH',
+    headers: { ...getAuthHeader() },
+  }).then(handleResponse),
+
+  deleteDefect: (id) => fetch(`${API_BASE}/defects/${id}`, {
+    method: 'DELETE',
+    headers: { ...getAuthHeader() },
+  }).then(handleResponse),
+  
 };

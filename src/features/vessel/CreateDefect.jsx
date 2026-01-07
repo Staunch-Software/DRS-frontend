@@ -57,6 +57,7 @@ const CreateDefect = () => {
     }
 
     setIsSaving(true);
+    const isEdit = !!location.state?.defectToEdit;
 
     try {
       // FIX 1: Use a real UUID. DEF-timestamp is NOT a valid UUID.
@@ -89,27 +90,35 @@ const CreateDefect = () => {
 
       const jsonPath = await blobUploadService.uploadMetadataJSON(fullPackage, defectId);
 
-      await defectApi.createDefect({
-        ...formData,
-        id: defectId,
-        vessel_imo: user.assignedVessels[0], // <--- Pass the IMO to the API
-        json_backup_path: jsonPath
-      });
+      if (isEdit) {
+        await defectApi.updateDefect(defectId, {
+          ...formData,
+          json_backup_path: jsonPath
+        });
+      } else {
+        // Create new record
+        await defectApi.createDefect({
+          ...formData,
+          id: defectId,
+          vessel_imo: user.assignedVessels[0],
+          json_backup_path: jsonPath
+        });
 
-      // Create Initial Thread
-      await defectApi.createThread({
-        id: threadId,
-        defect_id: defectId,
-        author: 'Chief Engineer',
-        body: initialComment || "Defect Reported"
-      });
+        // Only create the initial thread for NEW defects
+        await defectApi.createThread({
+          id: threadId,
+          defect_id: defectId,
+          author: 'Chief Engineer',
+          body: initialComment || "Defect Reported"
+        });
+      }
 
-      // Register Attachments
+      // Register new attachments (works for both new and edit)
       for (const att of attachmentMeta) {
         await defectApi.createAttachment(att);
       }
 
-      alert("Defect Synced Successfully!");
+      alert(isEdit ? "Defect Updated Successfully!" : "Defect Created Successfully!");
       navigate('/vessel/dashboard');
     } catch (err) {
       console.error("Sync Error:", err);
