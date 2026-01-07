@@ -15,10 +15,16 @@ import {
  * Handles the conversation dropdown logic
  */
 const ThreadSection = ({ defectId }) => {
+  const { user } = useAuth();
   const queryClient = useQueryClient();
   const [replyText, setReplyText] = useState("");
   const [files, setFiles] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [mentionList, setMentionList] = useState([]);
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState("");
+  const [taggedUsers, setTaggedUsers] = useState([]);
+  const [cursorPosition, setCursorPosition] = useState(0);
 
   // 1. Fetch Threads for this specific defect
   const { data: threads = [], isLoading } = useQuery({
@@ -26,6 +32,46 @@ const ThreadSection = ({ defectId }) => {
     queryFn: () => defectApi.getThreads(defectId),
     enabled: !!defectId
   });
+
+  const { data: vesselUsers = [] } = useQuery({
+    queryKey: ['vessel-users', defectId],
+    queryFn: () => defectApi.getVesselUsers(defectId),
+    enabled: !!defectId
+  });
+
+  const handleTextChange = (e) => {
+    const text = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    setReplyText(text);
+    setCursorPosition(cursorPos);
+
+    // Detect @ symbol
+    const textBeforeCursor = text.slice(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+    if (lastAtIndex !== -1 && (lastAtIndex === 0 || text[lastAtIndex - 1] === ' ')) {
+      const searchTerm = textBeforeCursor.slice(lastAtIndex + 1);
+      setMentionSearch(searchTerm);
+      const filtered = vesselUsers.filter(u =>
+        u.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setMentionList(filtered);
+      setShowMentions(filtered.length > 0);
+    } else {
+      setShowMentions(false);
+    }
+  };
+
+  const selectMention = (user) => {
+    const textBeforeCursor = replyText.slice(0, cursorPosition);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    const textAfterCursor = replyText.slice(cursorPosition);
+
+    const newText = replyText.slice(0, lastAtIndex) + `@${user.name} ` + textAfterCursor;
+    setReplyText(newText);
+    setTaggedUsers([...taggedUsers, user.id]);
+    setShowMentions(false);
+  };
 
   // 2. Reply Logic (Blob-First, Metadata-Second)
   const handleReply = async () => {
@@ -55,8 +101,10 @@ const ThreadSection = ({ defectId }) => {
         id: threadId,
         defect_id: defectId,
         author: "Superintendent",
-        body: replyText
+        body: replyText,
+        tagged_user_ids: taggedUsers
       });
+      setTaggedUsers([]);
 
       // C. METADATA-SECOND: Save Attachment Records
       for (const meta of uploadedAttachments) {
@@ -82,25 +130,34 @@ const ThreadSection = ({ defectId }) => {
         {threads.length === 0 ? (
           <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>No conversation history.</p>
         ) : (
-          threads.map(t => (
-            <div key={t.id} style={{ marginBottom: '15px', padding: '12px', background: 'white', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                <strong style={{ fontSize: '13px', color: '#1e293b' }}>{t.author}</strong>
-                <span style={{ fontSize: '11px', color: '#94a3b8' }}>{new Date(t.created_at).toLocaleString()}</span>
-              </div>
-              <p style={{ fontSize: '14px', color: '#334155', margin: '0' }}>{t.body}</p>
+          threads.map(t => {
+            const isMyMessage = t.user_id === user?.id;
+            return (
+              <div key={t.id} style={{ display: 'flex', justifyContent: isMyMessage ? 'flex-end' : 'flex-start', marginBottom: '15px' }}>
+                <div style={{ maxWidth: '70%', padding: '12px', background: isMyMessage ? '#dcf8c6' : 'white', borderRadius: isMyMessage ? '12px 12px 2px 12px' : '12px 12px 12px 2px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                    <strong style={{ fontSize: '13px', color: isMyMessage ? '#065f46' : '#1e293b' }}>{t.author}</strong>
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>{new Date(t.created_at).toLocaleString()}</span>
+                  </div>
+                  <p style={{ fontSize: '14px', color: '#334155', margin: '0' }}>
+                    {t.body.split(/(@[\w\s]+)/g).map((part, i) =>
+                      part.startsWith('@') ? <span key={i} style={{ color: '#3b82f6', fontWeight: '600' }}>{part}</span> : part
+                    )}
+                  </p>
 
-              {t.attachments?.length > 0 && (
-                <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
-                  {t.attachments.map(a => (
-                    <a key={a.id} href={a.blob_path} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#3b82f6', textDecoration: 'none', padding: '4px 8px', background: '#eff6ff', borderRadius: '4px' }}>
-                      <Download size={12} /> {a.file_name}
-                    </a>
-                  ))}
+                  {t.attachments?.length > 0 && (
+                    <div style={{ marginTop: '10px', display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                      {t.attachments.map(a => (
+                        <a key={a.id} href={a.blob_path} target="_blank" rel="noreferrer" style={{ display: 'flex', alignItems: 'center', gap: '4px', fontSize: '12px', color: '#3b82f6', textDecoration: 'none', padding: '4px 8px', background: '#eff6ff', borderRadius: '4px' }}>
+                          <Download size={12} /> {a.file_name}
+                        </a>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ))
+              </div>
+            );
+          })
         )}
       </div>
 
@@ -108,11 +165,20 @@ const ThreadSection = ({ defectId }) => {
       <div className="reply-box" style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
         <textarea
           className="input-field"
-          placeholder="Write a reply to the vessel..."
+          placeholder="Type a reply (use @ to mention)..."
           value={replyText}
-          onChange={(e) => setReplyText(e.target.value)}
-          style={{ minHeight: '80px', resize: 'vertical' }}
+          onChange={handleTextChange}
+          style={{ width: '100%', minHeight: '80px', marginBottom: '10px', position: 'relative' }}
         />
+        {showMentions && (
+          <div style={{ position: 'absolute', bottom: '120px', left: '20px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: '200px', overflowY: 'auto', zIndex: 1000, minWidth: '200px' }}>
+            {mentionList.map(u => (
+              <div key={u.id} onClick={() => selectMention(u)} style={{ padding: '10px', cursor: 'pointer', fontSize: '13px', borderBottom: '1px solid #f1f5f9' }}>
+                {u.name}
+              </div>
+            ))}
+          </div>
+        )}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <input type="file" multiple id={`file-reply-${defectId}`} onChange={(e) => setFiles(Array.from(e.target.files))} hidden />

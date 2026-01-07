@@ -31,6 +31,9 @@ export const defectApi = {
     headers: { ...getAuthHeader() }
   }).then(handleResponse),
 
+  getVesselUsers: (defectId) => fetch(`${API_BASE}/defects/${defectId}/vessel-users`, {
+    headers: { ...getAuthHeader() }
+  }).then(handleResponse),
 
   // --- POST METHODS (Already implemented) ---
 
