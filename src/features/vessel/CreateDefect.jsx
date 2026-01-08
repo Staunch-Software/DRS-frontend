@@ -32,7 +32,34 @@ const CreateDefect = () => {
 
   useEffect(() => {
     if (location.state?.defectToEdit) {
-      setFormData({ ...location.state.defectToEdit });
+      const d = location.state.defectToEdit;
+
+      // Manually map Backend Keys -> Frontend Form Keys
+      setFormData({
+        // 1. Format Date (Backend ISO -> Frontend YYYY-MM-DD)
+        date: d.date_identified ? d.date_identified.split('T')[0] : '',
+
+        // 2. Map Equipment
+        equipment: d.equipment_name || '',
+
+        // 3. Map Description & Remarks
+        description: d.description || '',
+        remarks: d.ships_remarks || '',
+
+        // 4. Map Enums (Convert UPPERCASE from DB to Title Case for UI if needed)
+        // If your <option> values are "NORMAL", keep them as is.
+        priority: d.priority || 'NORMAL',
+        status: d.status || 'OPEN',
+
+        responsibility: d.responsibility || 'Engine Dept',
+
+        // 5. Map Office Support (Boolean -> String for Dropdown)
+        officeSupport: d.office_support_required ? 'Yes' : 'No',
+
+        // 6. Map PR Details
+        prNumber: d.pr_number || '',
+        prStatus: d.pr_status || ''
+      });
     }
   }, [location]);
 

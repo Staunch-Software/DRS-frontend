@@ -4,7 +4,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
   AlertTriangle, Clock, ClipboardList, MessageSquare,
   ChevronDown, ChevronUp, Trash2, Edit, CheckCircle,
-  Filter, RotateCcw, Paperclip, Download
+  Filter, RotateCcw, Paperclip, Download, Send
 } from 'lucide-react';
 import { defectApi } from '../../services/defectApi';
 import { blobUploadService } from '../../services/blobUploadService';
@@ -21,84 +21,165 @@ const ThreadSection = ({ defectId }) => {
   const [replyText, setReplyText] = useState("");
   const [files, setFiles] = useState([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [mentionList, setMentionList] = useState([]);
+  const [showMentions, setShowMentions] = useState(false);
+  const [mentionSearch, setMentionSearch] = useState("");
+  const [taggedUsers, setTaggedUsers] = useState([]);
+  const [cursorPosition, setCursorPosition] = useState(0);
 
+  const { user } = useAuth();
   const { data: threads = [], isLoading } = useQuery({
     queryKey: ['threads', defectId],
     queryFn: () => defectApi.getThreads(defectId),
     enabled: !!defectId
   });
 
+  const { data: vesselUsers = [] } = useQuery({
+    queryKey: ['vessel-users', defectId],
+    queryFn: () => defectApi.getVesselUsers(defectId),
+    enabled: !!defectId
+  });
+
+  const handleTextChange = (e) => {
+    const text = e.target.value;
+    const cursorPos = e.target.selectionStart;
+    setReplyText(text);
+    setCursorPosition(cursorPos);
+
+    const textBeforeCursor = text.slice(0, cursorPos);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+
+    if (lastAtIndex !== -1 && (lastAtIndex === 0 || text[lastAtIndex - 1] === ' ')) {
+      const searchTerm = textBeforeCursor.slice(lastAtIndex + 1);
+      setMentionSearch(searchTerm);
+      const filtered = vesselUsers.filter(u =>
+        u.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setMentionList(filtered);
+      setShowMentions(filtered.length > 0);
+    } else {
+      setShowMentions(false);
+    }
+  };
+
+  const selectMention = (user) => {
+    const textBeforeCursor = replyText.slice(0, cursorPosition);
+    const lastAtIndex = textBeforeCursor.lastIndexOf('@');
+    const textAfterCursor = replyText.slice(cursorPosition);
+
+    const newText = replyText.slice(0, lastAtIndex) + `@${user.name} ` + textAfterCursor;
+    setReplyText(newText);
+    setTaggedUsers([...taggedUsers, user.id]);
+    setShowMentions(false);
+  };
+
   const handleReply = async () => {
     if (!replyText && files.length === 0) return;
     setIsUploading(true);
+
     try {
       const threadId = generateId();
       const uploadedAttachments = [];
+
       for (const file of files) {
         const attachmentId = generateId();
         const path = await blobUploadService.uploadBinary(file, defectId, attachmentId);
         uploadedAttachments.push({
-          id: attachmentId, thread_id: threadId, file_name: file.name,
-          file_size: file.size, content_type: file.type, blob_path: path
+          id: attachmentId,
+          thread_id: threadId,
+          file_name: file.name,
+          file_size: file.size,
+          content_type: file.type,
+          blob_path: path
         });
       }
+
       await defectApi.createThread({
-        id: threadId, defect_id: defectId,
+        id: threadId,
+        defect_id: defectId,
         author: "Chief Engineer",
-        body: replyText
+        body: replyText,
+        tagged_user_ids: taggedUsers
       });
+      setTaggedUsers([]);
+
       for (const meta of uploadedAttachments) {
         await defectApi.createAttachment(meta);
       }
-      setReplyText(""); setFiles([]);
+
+      setReplyText("");
+      setFiles([]);
       queryClient.invalidateQueries(['threads', defectId]);
     } catch (err) {
-      alert("Failed to send: " + err.message);
+      alert("Failed to send reply: " + err.message);
     } finally {
       setIsUploading(false);
     }
   };
 
-  if (isLoading) return <div className="modal-body">Loading conversation...</div>;
+  if (isLoading) return <div style={{ padding: '20px', color: '#64748b' }}>Loading conversation...</div>;
 
   return (
-    <>
-      <div className="modal-body" style={{ maxHeight: '400px', overflowY: 'auto' }}>
-        {threads.length === 0 && <p style={{ textAlign: 'center', color: '#94a3b8' }}>No messages yet.</p>}
-        {threads.map(t => (
-          <div key={t.id} className={`chat-msg ${t.author.includes('Engineer') ? '' : 'shore'}`} style={{ marginBottom: '15px' }}>
-            <strong>{t.author}:</strong>
-            <p>{t.body}</p>
-            {t.attachments?.map(a => (
-              <a key={a.id} href={a.blob_path} target="_blank" rel="noreferrer" className="att-link" style={{ fontSize: '12px', display: 'block', color: '#3b82f6' }}>
-                <Download size={12} /> {a.file_name}
-              </a>
+    <div className="thread-section-wrapper" style={{ padding: '20px', background: '#f8fafc', borderTop: '1px solid #e2e8f0' }}>
+      <div className="thread-history" style={{ marginBottom: '20px' }}>
+        {threads.length === 0 ? (
+          <p style={{ textAlign: 'center', color: '#94a3b8', fontSize: '13px' }}>No messages yet.</p>
+        ) : (
+          threads.map(t => {
+            const isMyMessage = t.user_id === user?.id;
+            return (
+              <div key={t.id} style={{ display: 'flex', justifyContent: isMyMessage ? 'flex-end' : 'flex-start', marginBottom: '15px' }}>
+                <div style={{ maxWidth: '70%', padding: '12px', background: isMyMessage ? '#dcf8c6' : 'white', borderRadius: isMyMessage ? '12px 12px 2px 12px' : '12px 12px 12px 2px', border: '1px solid #e2e8f0', boxShadow: '0 1px 2px rgba(0,0,0,0.05)' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '4px', gap: '10px' }}>
+                    <strong style={{ fontSize: '13px', color: isMyMessage ? '#065f46' : '#1e293b' }}>{t.author}</strong>
+                    <span style={{ fontSize: '11px', color: '#94a3b8' }}>{new Date(t.created_at).toLocaleString()}</span>
+                  </div>
+                  <p style={{ fontSize: '14px', color: '#334155', margin: '0' }}>
+                    {t.body.split(/(@[\w\s]+)/g).map((part, i) =>
+                      part.startsWith('@') ? <span key={i} style={{ color: '#3b82f6', fontWeight: '600' }}>{part}</span> : part
+                    )}
+                  </p>
+                  {t.attachments?.map(a => (
+                    <a key={a.id} href={a.blob_path} target="_blank" rel="noreferrer" style={{ display: 'block', fontSize: '12px', color: '#3b82f6', marginTop: '5px', textDecoration: 'none' }}>
+                      <Download size={12} /> {a.file_name}
+                    </a>
+                  ))}
+                </div>
+              </div>
+            );
+          })
+        )}
+      </div>
+
+      <div className="reply-box">
+        <textarea
+          className="input-field"
+          placeholder="Type a reply (use @ to mention)..."
+          value={replyText}
+          onChange={handleTextChange}
+          style={{ width: '100%', minHeight: '80px', marginBottom: '10px', position: 'relative' }}
+        />
+        {showMentions && (
+          <div style={{ position: 'absolute', bottom: '120px', left: '20px', background: 'white', border: '1px solid #e2e8f0', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', maxHeight: '200px', overflowY: 'auto', zIndex: 1000, minWidth: '200px' }}>
+            {mentionList.map(u => (
+              <div key={u.id} onClick={() => selectMention(u)} style={{ padding: '10px', cursor: 'pointer', fontSize: '13px', borderBottom: '1px solid #f1f5f9' }}>
+                {u.name}
+              </div>
             ))}
           </div>
-        ))}
-      </div>
-      <div className="modal-footer">
-        <div style={{ width: '100%' }}>
-          <textarea
-            className="input-field area"
-            placeholder="Type reply..."
-            value={replyText}
-            onChange={(e) => setReplyText(e.target.value)}
-            style={{ marginBottom: '10px', width: '100%' }}
-          />
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px' }}>
-              <Paperclip size={16} />
-              <input type="file" multiple hidden onChange={(e) => setFiles(Array.from(e.target.files))} />
-              {files.length > 0 ? `${files.length} files` : 'Attach Files'}
-            </label>
-            <button className="btn-primary" onClick={handleReply} disabled={isUploading}>
-              {isUploading ? 'Sending...' : 'Send'}
-            </button>
-          </div>
+        )}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <label style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '5px', fontSize: '13px', color: '#64748b' }}>
+            <Paperclip size={16} />
+            <input type="file" multiple hidden onChange={(e) => setFiles(Array.from(e.target.files))} />
+            {files.length > 0 ? `${files.length} files attached` : 'Attach Files'}
+          </label>
+          <button className="btn-primary" onClick={handleReply} disabled={isUploading}>
+            <Send size={16} /> {isUploading ? 'Sending...' : 'Send Reply'}
+          </button>
         </div>
       </div>
-    </>
+    </div>
   );
 };
 
@@ -185,7 +266,7 @@ const VesselDashboard = () => {
       }
     }
   };
-  
+
   if (isLoading) return <div className="dashboard-container">Loading Cloud Data...</div>;
 
   // Handle case where user has no assigned ship
@@ -300,13 +381,33 @@ const VesselDashboard = () => {
                             <div><strong>Date:</strong> <p>{new Date(defect.date_identified).toLocaleDateString()}</p></div>
                           </div>
                           <div className="detail-actions">
-                            <button className="btn-action edit" onClick={() => handleEdit(defect)}>
+                            <button
+                              className="btn-action edit"
+                              onClick={(e) => {
+                                e.stopPropagation(); // Prevents row from collapsing
+                                handleEdit(defect);
+                              }}
+                            >
                               <Edit size={16} /> Update
                             </button>
-                            <button className="btn-action close-task">
+
+                            <button
+                              className="btn-action close-task"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleCloseDefect(defect.id);
+                              }}
+                            >
                               <CheckCircle size={16} /> Close
                             </button>
-                            <button className="btn-action delete">
+
+                            <button
+                              className="btn-action delete"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handleDelete(defect.id);
+                              }}
+                            >
                               <Trash2 size={16} /> Remove
                             </button>
                           </div>
