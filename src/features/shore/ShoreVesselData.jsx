@@ -350,9 +350,79 @@ const ShoreVesselData = () => {
       </div>
 
       {/* Register Vessel Modal (Unchanged) */}
+     {/* Register Vessel Modal */}
       {isModalOpen && user?.role === 'ADMIN' && (
         <div className="modal-overlay">
-          {/* ... (Your existing modal code) ... */}
+          <div className="modal-content" style={{width: '450px'}}>
+            <div className="modal-header">
+              <h3><Ship size={18} style={{marginRight:'8px'}}/> Register New Vessel</h3>
+              <button onClick={() => setIsModalOpen(false)}><X size={20} /></button>
+            </div>
+            
+            <form onSubmit={handleSubmit} className="modal-body">
+              
+              <div className="form-group">
+                <label>IMO Number</label>
+                <input 
+                  className="input-field" 
+                  maxLength={7}
+                  placeholder="9792058"
+                  value={formData.imo_number}
+                  onChange={(e) => setFormData({...formData, imo_number: e.target.value.replace(/\D/g,'')})}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Vessel Name</label>
+                <input 
+                  className="input-field" 
+                  placeholder="A.M. UMANG" 
+                  value={formData.name}
+                  onChange={(e) => setFormData({...formData, name: e.target.value.toUpperCase()})}
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Vessel Type</label>
+                <select 
+                  className="input-field"
+                  value={formData.vessel_type}
+                  onChange={(e) => setFormData({...formData, vessel_type: e.target.value})}
+                >
+                  <option>Oil Tanker</option>
+                  <option>Bulk Carrier</option>
+                  <option>Container Ship</option>
+                  <option>LNG Carrier</option>
+                  <option>General Cargo</option>
+                </select>
+              </div>
+
+              <div className="form-group">
+                <label><Mail size={14} style={{verticalAlign:'middle'}}/> Ship Email (Optional)</label>
+                <input 
+                  type="email"
+                  className="input-field" 
+                  placeholder="master.umang@shipping.com" 
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
+                />
+              </div>
+
+              <div className="modal-footer" style={{borderTop:'none', padding:'0', marginTop:'20px'}}>
+                <button 
+                  type="submit" 
+                  className="btn-primary" 
+                  style={{width:'100%'}} 
+                  disabled={addVesselMutation.isPending}
+                >
+                  {addVesselMutation.isPending ? 'Registering...' : 'Confirm Registration'}
+                </button>
+              </div>
+
+            </form>
+          </div>
         </div>
       )}
     </div>
